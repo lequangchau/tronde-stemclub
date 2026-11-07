@@ -20,7 +20,7 @@ st.set_page_config(page_title="Trộn Đề Kiểm tra môn Vật Lí", page_ico
 
 st.title("📝 Dự án CLB STEM: Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT (Hỗ trợ Câu hỏi chùm)")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT (Hỗ trợ Câu hỏi chùm linh hoạt & cố định)")
 
 st.divider()
 
@@ -41,7 +41,7 @@ def get_node_text(node):
 
 def clean_mix_tags_from_elem(p_elem):
     """Xóa các thẻ [MIX...], [MIX FIXED...], [END MIX...], [CHÙM...], [/CHÙM...] khỏi XML đoạn văn"""
-    pattern = re.compile(r'\[\/?\s*(?:END\s+MIX\vert{}ENDMIX\vert{}MIX(?:\s*FIXED\vert{}_FIXED)?\vert{}FIXED\s*MIX\vert{}CHÙM(?:\s*FIXED\vert{}_FIXED)?\vert{}CHUM\vert{}CỤM\vert{}CUM)(?:[_\s]*\d+)?\s*\]', re.IGNORECASE)
+    pattern = re.compile(r'\[\/?\s*(?:END\s+MIX|ENDMIX|MIX(?:\s*FIXED|_FIXED)?|FIXED\s*MIX|CHÙM(?:\s*FIXED|_FIXED)?|CHUM|CỤM|CUM)(?:[_\s]*\d+)?\s*\]', re.IGNORECASE)
     for node in p_elem.iter():
         if node.tag.endswith('}t') and node.text:
             if pattern.search(node.text):
@@ -479,7 +479,7 @@ def doc_de_goc(file_stream):
                 "intro_elems": [],
                 "items": []
             }
-            clean_text = re.sub(r'\[\/?\s*(?:END\s+MIX\vert{}ENDMIX\vert{}MIX(?:\s*FIXED\vert{}_FIXED)?\vert{}FIXED\s*MIX\vert{}CHÙM(?:\s*FIXED\vert{}_FIXED)?\vert{}CHUM\vert{}CỤM\vert{}CUM)(?:[_\s]*\d+)?\s*\]', '', full_line, flags=re.IGNORECASE).strip()
+            clean_text = re.sub(r'\[\/?\s*(?:END\s+MIX|ENDMIX|MIX(?:\s*FIXED|_FIXED)?|FIXED\s*MIX|CHÙM(?:\s*FIXED|_FIXED)?|CHUM|CỤM|CUM)(?:[_\s]*\d+)?\s*\]', '', full_line, flags=re.IGNORECASE).strip()
             if not clean_text and not has_drawing:
                 continue
 
@@ -928,7 +928,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         r_f1.font.name = 'Times New Roman'
                         r_f1.font.size = Pt(12)
                         
-                        p_foot2 = doc.add_paragraph("Thí Sinh Không Được Sử Dụng Tài Liệu - Cán Bộ Coi Thi Không Giải Thích Gì Thêm.")
+                        p_foot2 = doc.add_paragraph("Thí sinh không được sử dụng tài liệu - Giám thị không giải thích gì thêm.")
                         p_foot2.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         r_f2 = p_foot2.runs[0]
                         r_f2.font.name = 'Times New Roman'; r_f2.font.size = Pt(10); r_f2.italic = True
@@ -990,3 +990,13 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
 
                     excel_io = io.BytesIO()
                     wb_excel.save(excel_io)
+                    zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
+
+                st.success("🎉 Trộn đề thành công!")
+                st.download_button(
+                    label="📥 TẢI XUỐNG CÁC MÃ ĐỀ & FILE ĐÁP ÁN (.ZIP)",
+                    data=zip_buffer.getvalue(),
+                    file_name="DE_DA_TRON.zip",
+                    mime="application/zip",
+                    type="primary"
+                )
