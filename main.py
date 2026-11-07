@@ -518,7 +518,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
 
                 st.success("🎉 Trộn đề thành công! Đã tạo file Excel đáp án ma trận khớp 100% mẫu quy định DAP AN_K10TN.xlsx.")
                 st.download_button(
-                    label="📥 TẢI XUẤN TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
+                    label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
                     file_name="Bo_De_Thi_Chuyen_Nghiep.zip",
                     mime="application/zip",
