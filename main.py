@@ -27,7 +27,7 @@ st.divider()
 
 # CONFIG ĐƯỜNG DẪN FILE MẪU & LINK LƯU TRỮ ĐÁM MÂY (CLOUD STORAGE)
 FILE_MAU_TEN = "TX_B9_MIX.docx"  # Đặt file TX_B9_MIX.docx cùng thư mục với main.py
-CLOUD_STORAGE_URL = ""  # Điền link Cloud Storage (ví dụ: Google Drive direct link, GitHub Raw) nếu lưu trữ trực tuyến
+CLOUD_STORAGE_URL = "https://docs.google.com/document/d/1kNN3qXByIqA3pE9rBpat0JfY6v5iBGWi/edit?usp=sharing&ouid=109853281143982423134&rtpof=true&sd=true"  # Điền link Cloud Storage (ví dụ: Google Drive direct link, GitHub Raw) nếu lưu trữ trực tuyến
 
 @st.cache_data
 def load_file_mau_bytes():
