@@ -51,16 +51,16 @@ def load_file_mau_bytes():
             
     return None
 
-# KHỐI GIAO DIỆN TẢI FILE MẪU CHUẨN (TX_B9_MIX.docx)
+# KHỐI GIAO DIỆN TẢI FILE MẪU CHUẨN (TX_B9_MIX.docx) - ĐÃ TỐI ƯU TỈ LỆ & CĂN GIỮA ĐỒNG BỘ
 with st.container():
-    col_mau1, col_mau2 = st.columns([3, 1])
+    col_mau1, col_mau2 = st.columns([1.8, 1], vertical_alignment="center")
     with col_mau1:
-        st.markdown(f"📄 **File đề mẫu:** Tải file **`{FILE_MAU_TEN}`**")
+        st.markdown(f"📄 **File đề mẫu chuẩn:** Tải file **`{FILE_MAU_TEN}`** để xem định dạng mẫu")
     with col_mau2:
         file_mau_data = load_file_mau_bytes()
         if file_mau_data:
             st.download_button(
-                label=f"📥 {FILE_MAU_TEN}",
+                label="📥 Tải File Mẫu (.docx)",
                 data=file_mau_data,
                 file_name=FILE_MAU_TEN,
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
