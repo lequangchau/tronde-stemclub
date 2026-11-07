@@ -504,7 +504,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
     if uploaded_file is None:
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
-        with st.spinner("Đang khởi tạo mã đề thi và xuất file Excel đáp án ma trận..."):
+        with st.spinner("Đang khởi tạo mã đề thi và xuất file Excel đáp án dạng ma trận..."):
             doc_goc_obj, phan1_goc, phan2_goc, phan3_goc = doc_de_goc(uploaded_file)
             
             danh_sach_ma_de = [m.strip() for m in ds_ma_de_input.split(",") if m.strip()]
@@ -711,7 +711,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         r_f1.font.name = 'Times New Roman'
                         r_f1.font.size = Pt(12)
                         
-                        p_foot2 = doc.add_paragraph("Thí Sinh Không Được Sử Dụng Tài Liệu - Cán Bộ Coi Thi Không Giải Thích Gì Thêm.")
+                        p_foot2 = doc.add_paragraph("Thí sinh không được sử dụng tài liệu - Giám thị coi thi không giải thích gì thêm")
                         p_foot2.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         r_f2 = p_foot2.runs[0]
                         r_f2.font.name = 'Times New Roman'; r_f2.font.size = Pt(10); r_f2.italic = True
@@ -782,7 +782,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
 
                 st.success("🎉 Trộn đề thành công!")
                 st.download_button(
-                    label="📥 TẢI XUẤT TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
+                    label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
                     file_name="DE_DA_TRON.zip",
                     mime="application/zip",
