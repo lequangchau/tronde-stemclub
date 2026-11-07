@@ -18,9 +18,9 @@ import pandas as pd
 # 1. CẤU HÌNH TRANG WEB STREAMLIT
 st.set_page_config(page_title="Phần mềm Trộn Đề Kiểm tra môn Vật Lí", page_icon="📝", layout="centered")
 
-st.title("📝 Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí Online")
+st.title("📝 Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT (Căn đều 2 bên Justify, In đậm chữ HẾT, Bảo toàn 100% MathType/OMML, Hình ảnh & Lọc bỏ Lời giải).")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT")
 
 st.divider()
 
@@ -458,7 +458,7 @@ uploaded_file = st.file_uploader("Bước 1: Tải lên file Word đề gốc (.
 if uploaded_file is not None:
     st.success(f"✅ Đã nhận file: **{uploaded_file.name}**")
 
-if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type="primary"):
+if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án", type="primary"):
     if uploaded_file is None:
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
@@ -738,7 +738,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                     wb_excel.save(excel_io)
                     zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công! Văn bản toàn bộ các phần đã được căn đều 2 bên (Justify) và chữ ---HẾT--- đã được in đậm.")
+                st.success("🎉 Trộn đề thành công!")
                 st.download_button(
                     label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
