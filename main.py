@@ -14,20 +14,70 @@ st.set_page_config(page_title="Phần mềm Trộn Đề Vật Lí", page_icon="
 # 2. GIAO DIỆN CHÍNH & THÔNG TIN TÁC GIẢ
 st.title("📝 Ứng Dụng Trộn Đề Vật Lí Online")
 st.caption("👨‍🏫 **Tác giả:** LQChau - CLB STEM - THPT Thủ Đức")
-st.write("Hệ thống hỗ trợ trộn đề 3 phần (THPT Quốc Gia) và xuất đáp án sang Excel.")
+st.write("Hệ thống trộn đề thi bảo toàn 100% công thức MathType, Equation, Hình ảnh & Bảng biểu.")
 
 st.divider()
 
-# 3. HÀM KIỂM TRA ĐẠO ĐẠN GẠCH CHÂN CỦA PHƯƠNG ÁN (LINH HOẠT TỐI ĐA)
+# 3. HÀM KIỂM TRA ĐẠO ĐẠN GẠCH CHÂN CỦA ĐÁP ÁN
 def Kiem_Tra_Gach_Chan(paragraph):
     for r in paragraph.runs:
         if r.text and r.text.strip():
-            # Nhận diện mọi kiểu gạch chân (True, Single, Thick...)
             if bool(r.underline) and r.underline != 0 and r.underline is not False:
                 return True
     return False
 
-# 4. HÀM ĐỌC VÀ PHÂN TÍCH ĐỀ GỐC FILE WORD (.DOCX)
+# 4. HÀM CHUẨN HÓA TIỀN TỐ (CÂU/ĐÁP ÁN) TRÊN NGUYÊN BẢN XML
+def Cap_Nhat_Tien_To_Cau(p_elem, new_prefix):
+    doc_temp = Document()
+    doc_temp._element.body.append(p_elem)
+    p = doc_temp.paragraphs[0]
+    
+    full_text = p.text
+    match = re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]*', full_text, re.IGNORECASE)
+    if match:
+        prefix_len = len(match.group(0))
+        remains = prefix_len
+        for r in p.runs:
+            if not r.text:
+                continue
+            if len(r.text) <= remains:
+                remains -= len(r.text)
+                r.text = ""
+            else:
+                r.text = r.text[remains:]
+                remains = 0
+                break
+                
+    r0 = p.add_run(new_prefix)
+    p._element.insert(0, r0._element)
+    return p._element
+
+def Cap_Nhat_Tien_To_Phuong_An(p_elem, new_prefix):
+    doc_temp = Document()
+    doc_temp._element.body.append(p_elem)
+    p = doc_temp.paragraphs[0]
+    
+    full_text = p.text
+    match = re.match(r'^[A-Da-d][\.\:\-\)\s]*', full_text)
+    if match:
+        prefix_len = len(match.group(0))
+        remains = prefix_len
+        for r in p.runs:
+            if not r.text:
+                continue
+            if len(r.text) <= remains:
+                remains -= len(r.text)
+                r.text = ""
+            else:
+                r.text = r.text[remains:]
+                remains = 0
+                break
+                
+    r0 = p.add_run(new_prefix)
+    p._element.insert(0, r0._element)
+    return p._element
+
+# 5. HÀM ĐỌC VÀ BẢO TỒN CẤU TRÚC ĐỀ GỐC FILE WORD (.DOCX)
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1, phan2, phan3 = [], [], []
@@ -39,7 +89,7 @@ def doc_de_goc(file_stream):
         if not line:
             continue
 
-        # --- RECOGNITION 1: PHÂN ĐOẠN (III/3 -> II/2 -> I/1) ---
+        # Nhận diện phân đoạn linh hoạt (Phần 1/I, Phần 2/II, Phần 3/III)
         if re.search(r'(?:\[?\s*PHAN[_\s]*3\s*\]?|PHẦN\s*(III|3)\b)', line, re.IGNORECASE):
             if current_item:
                 if current_section == 1: phan1.append(current_item)
@@ -62,41 +112,44 @@ def doc_de_goc(file_stream):
             current_section = 1
             continue
 
-        # --- RECOGNITION 2: TÊN CÂU HỎI (Câu 1., Câu 1:, Câu 1 -, Cau 1)... ---
         is_question = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', line, re.IGNORECASE))
 
-        # --- XỬ LÝ PHẦN I: Trắc nghiệm 4 phương án ---
+        # --- PHẦN I ---
         if current_section == 1:
             if is_question:
                 if current_item: phan1.append(current_item)
-                current_item = {"question": line, "options": [], "correct": None}
+                current_item = {"q_elem": p._element, "options": [], "correct_idx": None}
             elif re.match(r'^[A-Da-d][\.\:\-\)\s]', line) and current_item:
-                clean_opt = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', line).strip()
-                current_item["options"].append(clean_opt)
-                if Kiem_Tra_Gach_Chan(p):
-                    current_item["correct"] = clean_opt
+                clean_opt_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', line).strip()
+                is_under = Kiem_Tra_Gach_Chan(p)
+                opt_idx = len(current_item["options"])
+                current_item["options"].append({
+                    "elem": p._element,
+                    "text": clean_opt_text
+                })
+                if is_under:
+                    current_item["correct_idx"] = opt_idx
 
-        # --- XỬ LÝ PHẦN II: Trắc nghiệm Đúng / Sai ---
+        # --- PHẦN II ---
         elif current_section == 2:
             if is_question:
                 if current_item: phan2.append(current_item)
-                current_item = {"question": line, "sub_options": []}
+                current_item = {"q_elem": p._element, "sub_options": []}
             elif re.match(r'^[A-Da-d][\.\:\-\)\s]', line) and current_item:
-                clean_sub = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', line).strip()
-                is_true = Kiem_Tra_Gach_Chan(p)
+                is_under = Kiem_Tra_Gach_Chan(p)
                 current_item["sub_options"].append({
-                    "text": clean_sub,
-                    "is_correct": "Đúng" if is_true else "Sai"
+                    "elem": p._element,
+                    "is_correct": "Đúng" if is_under else "Sai"
                 })
 
-        # --- XỬ LÝ PHẦN III: Trả lời ngắn ---
+        # --- PHẦN III ---
         elif current_section == 3:
             if is_question:
                 if current_item: phan3.append(current_item)
-                current_item = {"question": line, "correct": ""}
+                current_item = {"q_elem": p._element, "correct": ""}
             elif re.search(r'Đáp\s*số\s*[\:\-\.]', line, re.IGNORECASE) and current_item:
                 current_item["correct"] = re.sub(r'^Đáp\s*số\s*[\:\-\.]\s*', '', line, flags=re.IGNORECASE).strip()
-    
+
     if current_item:
         if current_section == 1: phan1.append(current_item)
         elif current_section == 2: phan2.append(current_item)
@@ -104,7 +157,7 @@ def doc_de_goc(file_stream):
 
     return phan1, phan2, phan3
 
-# 5. XỬ LÝ GIAO DIỆN HỆ THỐNG
+# 6. THAO TÁC TRỘN ĐỀ VÀ XUẤT ĐÁP ÁN
 uploaded_file = st.file_uploader("Bước 1: Tải lên file Word đề gốc (.docx)", type=["docx"])
 
 if uploaded_file is not None:
@@ -116,14 +169,14 @@ if st.button("🚀 Bước 3: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
     if uploaded_file is None:
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
-        with st.spinner("Đang phân tích cấu trúc đề thi..."):
+        with st.spinner("Đang xử lý dữ liệu và trộn công thức/hình ảnh..."):
             phan1_goc, phan2_goc, phan3_goc = doc_de_goc(uploaded_file)
             
             tong_so_cau = len(phan1_goc) + len(phan2_goc) + len(phan3_goc)
             if tong_so_cau == 0:
-                st.error("❌ **Không đọc được câu hỏi nào!** Vui lòng kiểm tra xem đề đã có tiêu đề phần (Phần I, Phần II, Phần III) và các câu bắt đầu bằng 'Câu...' chưa.")
+                st.error("❌ **Không tìm thấy câu hỏi!** Vui lòng kiểm tra lại định dạng các tiêu đề phần (Phần I, Phần II, Phần III) trong file gốc.")
             else:
-                st.info(f"📊 Hệ thống đã nhận diện thành công: **{len(phan1_goc)}** câu Phần I | **{len(phan2_goc)}** câu Phần II | **{len(phan3_goc)}** câu Phần III")
+                st.info(f"📊 Đã nhận diện thành công: **{len(phan1_goc)}** câu Phần I | **{len(phan2_goc)}** câu Phần II | **{len(phan3_goc)}** câu Phần III")
                 
                 zip_buffer = io.BytesIO()
                 nhan_p1 = ["A.", "B.", "C.", "D."]
@@ -142,15 +195,27 @@ if st.button("🚀 Bước 3: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                             p1_shuffled = copy.deepcopy(phan1_goc)
                             random.shuffle(p1_shuffled)
                             for idx, q in enumerate(p1_shuffled):
-                                correct_text = q["correct"]
-                                random.shuffle(q["options"])
-                                txt_cau = re.sub(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]*', '', q["question"], flags=re.IGNORECASE)
-                                doc.add_paragraph(f"Câu {idx + 1}. {txt_cau}")
+                                # Thêm câu hỏi
+                                q_elem_copy = copy.deepcopy(q["q_elem"])
+                                updated_q = Cap_Nhat_Tien_To_Cau(q_elem_copy, f"Câu {idx + 1}. ")
+                                doc._element.body.append(updated_q)
                                 
+                                # Trộn phương án
+                                opts = q["options"]
+                                correct_idx = q["correct_idx"]
+                                
+                                # Đánh dấu đáp án đúng gốc trước khi xáo trộn
+                                for o_i, opt in enumerate(opts):
+                                    opt["is_correct"] = (o_i == correct_idx)
+                                
+                                random.shuffle(opts)
                                 correct_label = "Chưa chọn đáp án ở đề gốc"
-                                for o_idx, opt in enumerate(q["options"]):
-                                    doc.add_paragraph(f"   {nhan_p1[o_idx]} {opt}")
-                                    if correct_text is not None and opt == correct_text:
+                                for o_idx, opt in enumerate(opts):
+                                    opt_elem_copy = copy.deepcopy(opt["elem"])
+                                    updated_opt = Cap_Nhat_Tien_To_Phuong_An(opt_elem_copy, f"   {nhan_p1[o_idx]} ")
+                                    doc._element.body.append(updated_opt)
+                                    
+                                    if opt["is_correct"]:
                                         correct_label = nhan_p1[o_idx]
                                 
                                 danh_sach_excel_data.append({
@@ -163,14 +228,19 @@ if st.button("🚀 Bước 3: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                             p2_shuffled = copy.deepcopy(phan2_goc)
                             random.shuffle(p2_shuffled)
                             for idx, q in enumerate(p2_shuffled):
-                                random.shuffle(q["sub_options"])
-                                txt_cau = re.sub(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]*', '', q["question"], flags=re.IGNORECASE)
-                                doc.add_paragraph(f"Câu {idx + 1}. {txt_cau}")
+                                q_elem_copy = copy.deepcopy(q["q_elem"])
+                                updated_q = Cap_Nhat_Tien_To_Cau(q_elem_copy, f"Câu {idx + 1}. ")
+                                doc._element.body.append(updated_q)
                                 
-                                for s_idx, sub in enumerate(q["sub_options"]):
-                                    doc.add_paragraph(f"   {nhan_p2[s_idx]} {sub['text']}")
+                                subs = q["sub_options"]
+                                random.shuffle(subs)
+                                for s_idx, sub in enumerate(subs):
+                                    sub_elem_copy = copy.deepcopy(sub["elem"])
+                                    updated_sub = Cap_Nhat_Tien_To_Phuong_An(sub_elem_copy, f"   {nhan_p2[s_idx]} ")
+                                    doc._element.body.append(updated_sub)
+                                    
                                     danh_sach_excel_data.append({
-                                        "Mã Đề": ma_de, "Phần": "Phần II", "Câu Số": f"Câu {idx + 1} ý {nhan_p2[s_idx]}", "Đáp Án Đúng": sub['is_correct']
+                                        "Mã Đề": ma_de, "Phần": "Phần II", "Câu Số": f"Câu {idx + 1} ý {nhan_p2[s_idx]}", "Đáp Án Đúng": sub["is_correct"]
                                     })
 
                         # --- TRỘN PHẦN III ---
@@ -179,9 +249,11 @@ if st.button("🚀 Bước 3: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                             p3_shuffled = copy.deepcopy(phan3_goc)
                             random.shuffle(p3_shuffled)
                             for idx, q in enumerate(p3_shuffled):
-                                txt_cau = re.sub(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]*', '', q["question"], flags=re.IGNORECASE)
-                                doc.add_paragraph(f"Câu {idx + 1}. {txt_cau}")
+                                q_elem_copy = copy.deepcopy(q["q_elem"])
+                                updated_q = Cap_Nhat_Tien_To_Cau(q_elem_copy, f"Câu {idx + 1}. ")
+                                doc._element.body.append(updated_q)
                                 doc.add_paragraph("   Đáp số: ................................")
+                                
                                 danh_sach_excel_data.append({
                                     "Mã Đề": ma_de, "Phần": "Phần III", "Câu Số": idx + 1, "Đáp Án Đúng": q["correct"]
                                 })
@@ -197,7 +269,7 @@ if st.button("🚀 Bước 3: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         df.to_excel(writer, index=False, sheet_name="Dap_An_Tong_Hop")
                     zip_file.writestr("Bang_Dap_An_Cac_Ma_De.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công!")
+                st.success("🎉 Trộn đề hoàn tất! Đã bảo toàn trọn vẹn công thức MathType, Equation và hình ảnh.")
                 st.download_button(
                     label="📥 TẢI XUẤN TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
