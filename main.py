@@ -20,7 +20,7 @@ st.set_page_config(page_title="Phần mềm Trộn Đề Kiểm tra môn Vật L
 
 st.title("📝 Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí Online")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT (Bảo toàn 100% Công thức MathType/OMML, Hình ảnh, Đồ thị, Đánh số tự động & Lọc bỏ Lời giải).")
 
 st.divider()
 
