@@ -24,7 +24,7 @@ st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc c�
 
 st.divider()
 
-# 2. HÀM KHÓA CỨNG FONT TIMES NEW ROMAN 12PT VÀ SAO CHÉP HÌNH ẢNH / RELATIONS
+# 2. FONT TIMES NEW ROMAN 12PT & SAO CHÉP MỐI LIÊN KẾT HÌNH ẢNH
 def Thiet_Lap_Font_Times_New_Roman(doc):
     style = doc.styles['Normal']
     font = style.font
@@ -186,7 +186,7 @@ def Render_Phuong_An_Phan_1(doc, opts, nhan_p1):
             elem = Lay_Noi_Dung_Phuong_An_Clean(copy.deepcopy(opt["elem"]), prefix)
             append_elem(doc, elem)
 
-# 5. XÁC ĐỊNH ĐÁP ÁN & ĐỌC ĐỀ GỐC BẢO TOÀN HÌNH ẢNH / BẢNG BIỂU
+# 5. ĐỌC ĐỀ GỐC BẢO TOÀN HÌNH ẢNH VÀ BẢNG BIỂU
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1, phan2, phan3 = [], [], []
@@ -195,7 +195,10 @@ def doc_de_goc(file_stream):
 
     for p in doc.paragraphs:
         line = p.text.strip()
-        if not line:
+        has_drawing = ("drawing" in p._element.xml or "graphic" in p._element.xml or "pict" in p._element.xml)
+        
+        # Nếu không có chữ và cũng không có hình ảnh -> Bỏ qua dòng trống thuần túy
+        if not line and not has_drawing:
             continue
 
         if re.search(r'(?:\[?\s*PHAN[_\s]*3\s*\]?|PHẦN\s*(III|3)\b)', line, re.IGNORECASE):
@@ -225,7 +228,7 @@ def doc_de_goc(file_stream):
         if current_section == 1:
             if is_question:
                 if current_item: phan1.append(current_item)
-                current_item = {"q_elem": p._element, "options": [], "correct_idx": None}
+                current_item = {"q_elems": [p._element], "options": [], "correct_idx": None}
             elif re.match(r'^[A-Da-d][\.\:\-\)\s]', line) and current_item:
                 clean_opt_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', line).strip()
                 is_under = Kiem_Tra_Gach_Chan(p)
@@ -236,11 +239,15 @@ def doc_de_goc(file_stream):
                 })
                 if is_under:
                     current_item["correct_idx"] = opt_idx
+            elif current_item:
+                # Nếu là đoạn văn chứa ảnh hoặc bảng đính kèm câu hỏi (trước khi tới phương án A,B,C,D)
+                if len(current_item["options"]) == 0:
+                    current_item["q_elems"].append(p._element)
 
         elif current_section == 2:
             if is_question:
                 if current_item: phan2.append(current_item)
-                current_item = {"q_elem": p._element, "sub_options": []}
+                current_item = {"q_elems": [p._element], "sub_options": []}
             elif re.match(r'^[A-Da-d][\.\:\-\)\s]', line) and current_item:
                 clean_sub_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', line).strip()
                 is_under = Kiem_Tra_Gach_Chan(p)
@@ -249,16 +256,21 @@ def doc_de_goc(file_stream):
                     "text": clean_sub_text,
                     "is_correct": "Đúng" if is_under else "Sai"
                 })
+            elif current_item:
+                if len(current_item["sub_options"]) == 0:
+                    current_item["q_elems"].append(p._element)
 
         elif current_section == 3:
             if is_question:
                 if current_item: phan3.append(current_item)
-                current_item = {"q_elem": p._element, "correct": ""}
+                current_item = {"q_elems": [p._element], "correct": ""}
             elif current_item:
                 if re.search(r'(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA|Đáp)\b', line, re.IGNORECASE):
                     current_item["correct"] = re.sub(r'^.*?(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA|Đáp)\s*[\:\-\.]*\s*', '', line, flags=re.IGNORECASE).strip()
                 elif not line.lower().startswith("lời giải") and not current_item["correct"]:
                     current_item["correct"] = line.strip()
+                else:
+                    current_item["q_elems"].append(p._element)
 
     if current_item:
         if current_section == 1: phan1.append(current_item)
@@ -400,8 +412,13 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                             p1_shuffled = copy.deepcopy(phan1_goc)
                             random.shuffle(p1_shuffled)
                             for idx, q in enumerate(p1_shuffled):
-                                updated_q = Cap_Nhat_Tien_To_Cau(q["q_elem"], f"Câu {idx + 1}: ")
-                                append_elem(doc, updated_q)
+                                # Xuất phần chữ của thân câu hỏi (Đoạn 1)
+                                updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], f"Câu {idx + 1}: ")
+                                append_elem(doc, updated_q0)
+                                
+                                # Xuất các đoạn văn đính kèm (Ảnh đồ thị, bảng biểu...)
+                                for sub_elem in q["q_elems"][1:]:
+                                    append_elem(doc, copy.deepcopy(sub_elem))
                                 
                                 opts = q["options"]
                                 correct_idx = q["correct_idx"]
@@ -429,8 +446,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                             p2_shuffled = copy.deepcopy(phan2_goc)
                             random.shuffle(p2_shuffled)
                             for idx, q in enumerate(p2_shuffled):
-                                updated_q = Cap_Nhat_Tien_To_Cau(q["q_elem"], f"Câu {idx + 1}: ")
-                                append_elem(doc, updated_q)
+                                updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], f"Câu {idx + 1}: ")
+                                append_elem(doc, updated_q0)
+                                
+                                for sub_elem in q["q_elems"][1:]:
+                                    append_elem(doc, copy.deepcopy(sub_elem))
                                 
                                 subs = q["sub_options"]
                                 random.shuffle(subs)
@@ -457,8 +477,12 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                             p3_shuffled = copy.deepcopy(phan3_goc)
                             random.shuffle(p3_shuffled)
                             for idx, q in enumerate(p3_shuffled):
-                                updated_q = Cap_Nhat_Tien_To_Cau(q["q_elem"], f"Câu {idx + 1}: ")
-                                append_elem(doc, updated_q)
+                                updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], f"Câu {idx + 1}: ")
+                                append_elem(doc, updated_q0)
+                                
+                                for sub_elem in q["q_elems"][1:]:
+                                    append_elem(doc, copy.deepcopy(sub_elem))
+                                    
                                 ma_de_answers[ma_de]['p3'].append(str(q["correct"]).strip())
 
                         # 6. LỜI DẶN CHÂN TRANG
