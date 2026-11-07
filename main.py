@@ -472,7 +472,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
 
                 st.success("🎉 Trộn đề thành công! Toàn bộ các file mã đề đã được chuẩn hóa Times New Roman 12pt và định dạng 3 dòng thông tin thí sinh.")
                 st.download_button(
-                    label="📥 TẢI XUẤN TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
+                    label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
                     file_name="Bo_De_Thi_Chuyen_Nghiep.zip",
                     mime="application/zip",
