@@ -67,7 +67,7 @@ with st.container():
         file_mau_data = load_file_mau_bytes()
         if file_mau_data:
             st.download_button(
-                label="📥 Tải File Mẫu (.docx)",
+                label="📥 File Mẫu (.docx)",
                 data=file_mau_data,
                 file_name=FILE_MAU_TEN,
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
