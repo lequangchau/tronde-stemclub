@@ -20,11 +20,20 @@ st.set_page_config(page_title="Phần mềm Trộn Đề Kiểm tra môn Vật L
 
 st.title("📝 Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí Online")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí theo chuẩn cấu trúc của Bộ GD&ĐT")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT (Bảo toàn 100% Công thức MathType/OMML, Hình ảnh, Đồ thị, Đánh số tự động & Lọc bỏ Lời giải).")
 
 st.divider()
 
-# 2. HÀM THIẾT LẬP FONT VÀ XỬ LÝ COPY HÌNH ẢNH CHUẨN XÁC MÃ RID
+# 2. HÀM TRÍCH XUẤT VĂN BẢN TOÀN DIỆN (BAO GỒM CẢ THẺ CÔNG THỨC <m:oMath>)
+def get_full_text(p_elem):
+    """Trích xuất toàn bộ chữ trong đoạn văn XML, bao gồm chữ thường (<w:t>) và công thức toán (<m:t>)"""
+    texts = []
+    for node in p_elem.iter():
+        if node.tag.endswith('}t'):
+            if node.text:
+                texts.append(node.text)
+    return "".join(texts)
+
 def Thiet_Lap_Font_Times_New_Roman(doc):
     style = doc.styles['Normal']
     font = style.font
@@ -85,14 +94,13 @@ def Has_Auto_Numbering(p):
         return True
     return False
 
-# 3. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (FONT TIMES NEW ROMAN 12PT)
+# 3. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (BẢO TOÀN CÔNG THỨC TOÁN & FONT TIMES NEW ROMAN 12PT)
 def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     elem_copied = Copy_Element_With_Media(p_elem, doc_src, doc_target, rid_map)
     doc_temp = Document()
     append_elem(doc_temp, elem_copied)
     p = doc_temp.paragraphs[0]
     
-    # Xóa tính năng auto numbering trên câu mới để không bị lặp lại số
     pPr = p._element.pPr
     if pPr is not None and pPr.numPr is not None:
         pPr.remove(pPr.numPr)
@@ -216,33 +224,7 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
             elem = Lay_Noi_Dung_Phuong_An_Clean(opt["elem"], doc_src, doc, rid_map, prefix)
             append_elem(doc, elem)
 
-# 5. TÁCH PHƯƠNG ÁN TRÊN CÙNG DÒNG (NẾU GIÁO VIÊN GÕ NHIỀU ĐÁP ÁN CÙNG DÒNG)
-def Tach_Phuong_An_Tren_Dong(p):
-    text = p.text.strip()
-    matches = list(re.finditer(r'(?:^|[\t\s]{2,}|(?<=\s))([A-Da-d])[\.\:\-\)\s]', text))
-    if len(matches) <= 1:
-        clean_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', text).strip()
-        is_under = Kiem_Tra_Gach_Chan(p)
-        return [{"elem": p._element, "text": clean_text, "is_under": is_under}]
-    else:
-        results = []
-        positions = [m.start(1) for m in matches]
-        for i in range(len(positions)):
-            start_pos = positions[i]
-            end_pos = positions[i+1] if i + 1 < len(positions) else len(text)
-            segment = text[start_pos:end_pos].strip()
-            clean_opt_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', segment).strip()
-            is_under = Kiem_Tra_Gach_Chan(p)
-            
-            doc_tmp = Document()
-            p_new = doc_tmp.add_paragraph()
-            r = p_new.add_run(segment)
-            r.font.name = 'Times New Roman'
-            r.font.size = Pt(12)
-            results.append({"elem": p_new._element, "text": clean_opt_text, "is_under": is_under})
-        return results
-
-# 6. ĐỌC VÀ BẢO TOÀN TRỌN VẸN THÂN CÂU HỎI (HỖ TRỢ ĐÁNH SỐ TỰ ĐỘNG & BỎ LỜI GIẢI)
+# 5. ĐỌC VÀ BẢO TOÀN TRỌN VẸN CÔNG THỨC & THÂN CÂU HỎI
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1, phan2, phan3 = [], [], []
@@ -258,14 +240,15 @@ def doc_de_goc(file_stream):
         return bool(re.search(r'(?:\[?\s*PHAN[_\s]*[123]\s*\]?|PHẦN\s*(I|II|III|1|2|3)\b)', line, re.IGNORECASE))
 
     for p in doc.paragraphs:
+        full_line = get_full_text(p._element).strip()
         line = p.text.strip()
-        has_drawing = ("drawing" in p._element.xml or "graphic" in p._element.xml or "pict" in p._element.xml)
+        has_drawing = ("drawing" in p._element.xml or "graphic" in p._element.xml or "pict" in p._element.xml or "oMath" in p._element.xml)
         
-        if not line and not has_drawing:
+        if not full_line and not has_drawing:
             continue
 
         # Kiểm tra tiêu đề các Phần
-        if re.search(r'(?:\[?\s*PHAN[_\s]*3\s*\]?|PHẦN\s*(III|3)\b)', line, re.IGNORECASE):
+        if re.search(r'(?:\[?\s*PHAN[_\s]*3\s*\]?|PHẦN\s*(III|3)\b)', full_line, re.IGNORECASE):
             if current_item:
                 if current_section == 1: phan1.append(current_item)
                 elif current_section == 2: phan2.append(current_item)
@@ -274,7 +257,7 @@ def doc_de_goc(file_stream):
             current_section = 3
             in_solution = False
             continue
-        elif re.search(r'(?:\[?\s*PHAN[_\s]*2\s*\]?|PHẦN\s*(II|2)\b)', line, re.IGNORECASE):
+        elif re.search(r'(?:\[?\s*PHAN[_\s]*2\s*\]?|PHẦN\s*(II|2)\b)', full_line, re.IGNORECASE):
             if current_item:
                 if current_section == 1: phan1.append(current_item)
                 elif current_section == 2: phan2.append(current_item)
@@ -283,7 +266,7 @@ def doc_de_goc(file_stream):
             current_section = 2
             in_solution = False
             continue
-        elif re.search(r'(?:\[?\s*PHAN[_\s]*1\s*\]?|PHẦN\s*(I|1)\b)', line, re.IGNORECASE):
+        elif re.search(r'(?:\[?\s*PHAN[_\s]*1\s*\]?|PHẦN\s*(I|1)\b)', full_line, re.IGNORECASE):
             if current_item:
                 if current_section == 1: phan1.append(current_item)
                 elif current_section == 2: phan2.append(current_item)
@@ -294,12 +277,12 @@ def doc_de_goc(file_stream):
             continue
 
         # NHẬN BIẾT CÂU HỎI MỚI (BẰNG CHỮ THỦ CÔNG HOẶC ĐÁNH SỐ TỰ ĐỘNG WORD BULLETS & NUMBERING)
-        is_opt_line = bool(re.match(r'^[A-Da-d][\.\:\-\)\s]', line))
+        is_opt_line = bool(re.match(r'^[A-Da-d][\.\:\-\)\s]', full_line))
         is_auto_num = Has_Auto_Numbering(p)
-        is_explicit_q = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', line, re.IGNORECASE)) or bool(re.match(r'^\d+[\.\:\-\)\s]', line))
+        is_explicit_q = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', full_line, re.IGNORECASE)) or bool(re.match(r'^\d+[\.\:\-\)\s]', full_line))
         
         is_question = False
-        if not is_sec_header(line) and not is_sol_header(line):
+        if not is_sec_header(full_line) and not is_sol_header(full_line):
             if is_explicit_q:
                 is_question = True
             elif is_auto_num and not is_opt_line:
@@ -308,7 +291,7 @@ def doc_de_goc(file_stream):
         if is_question:
             in_solution = False
 
-        if is_sol_header(line):
+        if is_sol_header(full_line):
             in_solution = True
 
         if current_section == 1:
@@ -317,20 +300,20 @@ def doc_de_goc(file_stream):
                 current_item = {"q_elems": [p._element], "options": [], "correct_idx": None}
             elif current_item and not in_solution:
                 if is_opt_line:
-                    extracted_opts = Tach_Phuong_An_Tren_Dong(p)
-                    for opt in extracted_opts:
-                        opt_idx = len(current_item["options"])
-                        current_item["options"].append({
-                            "elem": opt["elem"],
-                            "text": opt["text"]
-                        })
-                        if opt["is_under"]:
-                            current_item["correct_idx"] = opt_idx
+                    clean_opt_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', full_line).strip()
+                    is_under = Kiem_Tra_Gach_Chan(p)
+                    opt_idx = len(current_item["options"])
+                    current_item["options"].append({
+                        "elem": p._element,
+                        "text": clean_opt_text
+                    })
+                    if is_under:
+                        current_item["correct_idx"] = opt_idx
                 elif len(current_item["options"]) == 0:
                     current_item["q_elems"].append(p._element)
             elif current_item and in_solution:
                 if current_item["correct_idx"] is None:
-                    m_ans = re.search(r'(?:Chọn|Đáp\s*án|ĐA)\s*([A-D])\b', line, re.IGNORECASE)
+                    m_ans = re.search(r'(?:Chọn|Đáp\s*án|ĐA)\s*([A-D])\b', full_line, re.IGNORECASE)
                     if m_ans:
                         ans_char = m_ans.group(1).upper()
                         current_item["correct_idx"] = ord(ans_char) - ord('A')
@@ -341,7 +324,7 @@ def doc_de_goc(file_stream):
                 current_item = {"q_elems": [p._element], "sub_options": []}
             elif current_item and not in_solution:
                 if is_opt_line:
-                    clean_sub_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', line).strip()
+                    clean_sub_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', full_line).strip()
                     is_under = Kiem_Tra_Gach_Chan(p)
                     current_item["sub_options"].append({
                         "elem": p._element,
@@ -356,14 +339,14 @@ def doc_de_goc(file_stream):
                 if current_item: phan3.append(current_item)
                 current_item = {"q_elems": [p._element], "correct": ""}
             elif current_item:
-                if is_sol_header(line):
-                    if re.search(r'(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA)\b', line, re.IGNORECASE):
-                        ans_val = re.sub(r'^.*?(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA)\s*[\:\-\.]*\s*', '', line, flags=re.IGNORECASE).strip()
+                if is_sol_header(full_line):
+                    if re.search(r'(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA)\b', full_line, re.IGNORECASE):
+                        ans_val = re.sub(r'^.*?(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA)\s*[\:\-\.]*\s*', '', full_line, flags=re.IGNORECASE).strip()
                         if ans_val:
                             current_item["correct"] = ans_val
                 elif in_solution:
-                    if not current_item["correct"] and line.strip() and not line.lower().startswith("lời giải"):
-                        current_item["correct"] = line.strip()
+                    if not current_item["correct"] and full_line.strip() and not full_line.lower().startswith("lời giải"):
+                        current_item["correct"] = full_line.strip()
                 elif not in_solution:
                     current_item["q_elems"].append(p._element)
 
@@ -374,7 +357,7 @@ def doc_de_goc(file_stream):
 
     return doc, phan1, phan2, phan3
 
-# 7. KHU VỰC THIẾT LẬP THÔNG TIN (UI STREAMLIT)
+# 6. KHU VỰC THIẾT LẬP THÔNG TIN (UI STREAMLIT)
 with st.expander("⚙️ **THÔNG TIN TIÊU ĐỀ ĐỀ KIỂM TRA & CÁC MÃ ĐỀ**", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
@@ -656,7 +639,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                     wb_excel.save(excel_io)
                     zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công! Hệ thống đã tự động nhận diện cả Đánh số thủ công và Bullets & Numbering tự động của Word!")
+                st.success("🎉 Trộn đề thành công! Đã bảo toàn 100% công thức toán OMML/MathType, hình ảnh và đồ thị trong toàn bộ mã đề.")
                 st.download_button(
                     label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
