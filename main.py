@@ -20,7 +20,7 @@ st.set_page_config(page_title="Phần mềm Trộn Đề Kiểm tra môn Vật L
 
 st.title("📝 Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí Online")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT (Hỗ trợ Tách nhiều đáp án cùng dòng, Bảo toàn 100% Công thức MathType/OMML, Hình ảnh, Đồ thị, Đánh số tự động & Lọc bỏ Lời giải).")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT")
 
 st.divider()
 
@@ -95,12 +95,8 @@ def Has_Auto_Numbering(p):
         return True
     return False
 
-# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN (KHẮC PHỤC LỖI INDEXERROR)
+# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN (KHẮC PHỤC LỖI INDEXERROR & LỌC TAB THỪA)
 def split_paragraph_options(p_elem):
-    """
-    Tách đoạn văn XML chứa nhiều đáp án trên cùng 1 dòng (ví dụ A. ... B. ...) 
-    thành các đoạn văn XML riêng biệt, bảo toàn 100% công thức toán OMML/MathType.
-    """
     children = []
     for child in p_elem:
         if not child.tag.endswith('}pPr'):
@@ -162,7 +158,7 @@ def split_paragraph_options(p_elem):
         })
     return options
 
-# 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (BẢO TOÀN FONT TIMES NEW ROMAN 12PT)
+# 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (LÀM SẠCH TAB THỪA & ĐẦU CÂU)
 def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     elem_copied = Copy_Element_With_Media(p_elem, doc_src, doc_target, rid_map)
     doc_temp = Document()
@@ -206,8 +202,12 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
     if pPr is not None and pPr.numPr is not None:
         pPr.remove(pPr.numPr)
         
+    # Loại bỏ toàn bộ thẻ <w:tab/> tồn đọng từ đề gốc
+    for tab in p._element.xpath('.//w:tab'):
+        tab.getparent().remove(tab)
+        
     full_text = get_node_text(p._element)
-    match = re.match(r'^[A-Da-d][\.\:\-\)\s]*', full_text)
+    match = re.match(r'^[A-Da-d0-9][\.\:\-\)\s]*', full_text)
     if match:
         prefix_len = len(match.group(0))
         remains = prefix_len
@@ -222,24 +222,29 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
                 remains = 0
                 break
                 
-    r0 = p.add_run(new_prefix)
-    r0.bold = True
-    r0.font.name = 'Times New Roman'
-    r0.font.size = Pt(12)
-    p._element.insert(0, r0._element)
+    if new_prefix:
+        r0 = p.add_run(new_prefix)
+        r0.bold = True
+        r0.font.name = 'Times New Roman'
+        r0.font.size = Pt(12)
+        p._element.insert(0, r0._element)
     return p._element
 
-# 5. DÀN HÀNG ĐÁP ÁN PHẦN I BẰNG TAB
+# 5. DÀN HÀNG ĐÁP ÁN PHẦN I CHUẨN THẨM MỸ (THẮT CHẶT ĐIỀU KIỆN & CĂN LỀ TAB CHUẨN A4)
 def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
     total_len = sum(len(opt["text"]) for opt in opts)
     max_len = max(len(opt["text"]) for opt in opts) if opts else 0
+    has_math = any("oMath" in opt["elem"].xml for opt in opts)
     
-    if total_len < 45 and max_len < 15 and len(opts) == 4:
+    # Chỉ xếp 1 dòng nếu phương án cực ngắn và KHÔNG chứa công thức toán/lý phức tạp
+    if total_len <= 28 and max_len <= 8 and len(opts) == 4 and not has_math:
         p_combined = Document().add_paragraph()
         p_format = p_combined.paragraph_format
-        p_format.tab_stops.add_tab_stop(Cm(4.3))
-        p_format.tab_stops.add_tab_stop(Cm(8.7))
-        p_format.tab_stops.add_tab_stop(Cm(13.1))
+        p_format.space_before = Pt(0)
+        p_format.space_after = Pt(2)
+        p_format.tab_stops.add_tab_stop(Cm(4.0))
+        p_format.tab_stops.add_tab_stop(Cm(8.0))
+        p_format.tab_stops.add_tab_stop(Cm(12.0))
         
         for idx, opt in enumerate(opts):
             prefix = f"{nhan_p1[idx]} "
@@ -255,9 +260,14 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
                 
         append_elem(doc, p_combined._element)
         
-    elif total_len < 90 and max_len < 30 and len(opts) == 4:
+    # Xếp 2 dòng x 2 cột (Căn giữa trang bằng Tab 8.5 cm) cho các câu có độ dài vừa phải / chứa công thức
+    elif total_len <= 100 and max_len <= 32 and len(opts) == 4:
+        # Dòng 1: A và B
         p_line1 = Document().add_paragraph()
-        p_line1.paragraph_format.tab_stops.add_tab_stop(Cm(8.7))
+        p_line1.paragraph_format.space_before = Pt(0)
+        p_line1.paragraph_format.space_after = Pt(1)
+        p_line1.paragraph_format.tab_stops.add_tab_stop(Cm(8.5))
+        
         for idx in [0, 1]:
             prefix = f"{nhan_p1[idx]} "
             elem = Lay_Noi_Dung_Phuong_An_Clean(opts[idx]["elem"], doc_src, doc, rid_map, prefix)
@@ -271,8 +281,12 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
                 r_t.font.size = Pt(12)
         append_elem(doc, p_line1._element)
         
+        # Dòng 2: C và D
         p_line2 = Document().add_paragraph()
-        p_line2.paragraph_format.tab_stops.add_tab_stop(Cm(8.7))
+        p_line2.paragraph_format.space_before = Pt(0)
+        p_line2.paragraph_format.space_after = Pt(2)
+        p_line2.paragraph_format.tab_stops.add_tab_stop(Cm(8.5))
+        
         for idx in [2, 3]:
             prefix = f"{nhan_p1[idx]} "
             elem = Lay_Noi_Dung_Phuong_An_Clean(opts[idx]["elem"], doc_src, doc, rid_map, prefix)
@@ -286,11 +300,16 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
                 r_t.font.size = Pt(12)
         append_elem(doc, p_line2._element)
         
+    # Xếp 4 dòng (mỗi lựa chọn 1 dòng) nếu câu dài
     else:
         for idx, opt in enumerate(opts):
             prefix = f"{nhan_p1[idx]} " if idx < len(nhan_p1) else ""
             elem = Lay_Noi_Dung_Phuong_An_Clean(opt["elem"], doc_src, doc, rid_map, prefix)
-            append_elem(doc, elem)
+            doc_tmp = Document()
+            append_elem(doc_tmp, elem)
+            doc_tmp.paragraphs[0].paragraph_format.space_before = Pt(0)
+            doc_tmp.paragraphs[0].paragraph_format.space_after = Pt(2)
+            append_elem(doc, doc_tmp.paragraphs[0]._element)
 
 # 6. ĐỌC VÀ BẢO TOÀN TRỌN VẸN CÔNG THỨC & THÂN CÂU HỎI
 def doc_de_goc(file_stream):
@@ -706,7 +725,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                     wb_excel.save(excel_io)
                     zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công! Đã tự động tách nhiều đáp án trên 1 dòng, bảo toàn 100% công thức toán OMML/MathType và hình ảnh!")
+                st.success("🎉 Trộn đề thành công! Đã chuẩn hóa căn lề Tab, tự động bóc tách và phân bố phương án cực kỳ chuẩn thẩm mỹ!")
                 st.download_button(
                     label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
