@@ -812,7 +812,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
 
                 st.success("🎉 Trộn đề thành công!")
                 st.download_button(
-                    label="📥 TẢI XUẤT TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
+                    label="📥 TẢI XUỐNG CÁC MÃ ĐỀ & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
                     file_name="DE_DA_TRON.zip",
                     mime="application/zip",
