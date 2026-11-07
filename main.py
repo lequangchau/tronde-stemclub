@@ -40,12 +40,37 @@ def get_node_text(node):
     return text
 
 def clean_mix_tags_from_elem(p_elem):
-    """Xóa các thẻ [MIX...], [MIX FIXED...], [END MIX...], [CHÙM...], [/CHÙM...] khỏi XML đoạn văn"""
-    pattern = re.compile(r'\[\/?\s*(?:END\s+MIX|ENDMIX|MIX(?:\s*FIXED|_FIXED)?|FIXED\s*MIX|CHÙM(?:\s*FIXED|_FIXED)?|CHUM|CỤM|CUM)(?:[_\s]*\d+)?\s*\]', re.IGNORECASE)
-    for node in p_elem.iter():
-        if node.tag.endswith('}t') and node.text:
-            if pattern.search(node.text):
-                node.text = pattern.sub('', node.text)
+    """Xóa triệt để các thẻ [MIX...], [MIX FIXED...], [END MIX...], [CHÙM...], [/CHÙM...] khỏi XML đoạn văn (kể cả khi bị Word tách nhỏ ra nhiều run)"""
+    pattern = re.compile(
+        r'\[\/?\s*(?:END\s+MIX|ENDMIX|MIX(?:\s*FIXED|_FIXED)?|FIXED\s*MIX|FIXED_MIX|CHÙM(?:\s*FIXED|_FIXED)?|CHUM(?:\s*FIXED|_FIXED)?|CỤM(?:\s*FIXED|_FIXED)?|CUM(?:\s*FIXED|_FIXED)?)(?:[_\s]*\d+)?\s*\]',
+        re.IGNORECASE
+    )
+    t_nodes = [node for node in p_elem.iter() if node.tag.endswith('}t') and node.text]
+    if not t_nodes:
+        return
+        
+    full_text = "".join(node.text for node in t_nodes)
+    matches = list(pattern.finditer(full_text))
+    if not matches:
+        return
+        
+    char_map = []
+    for node in t_nodes:
+        for idx in range(len(node.text)):
+            char_map.append((node, idx))
+            
+    to_delete = set()
+    for m in matches:
+        for pos in range(m.start(), m.end()):
+            to_delete.add(pos)
+            
+    node_text_map = {node: [] for node in t_nodes}
+    for pos, (node, char_idx) in enumerate(char_map):
+        if pos not in to_delete:
+            node_text_map[node].append(node.text[char_idx])
+            
+    for node in t_nodes:
+        node.text = "".join(node_text_map[node])
 
 def Thiet_Lap_Font_Times_New_Roman(doc):
     style = doc.styles['Normal']
