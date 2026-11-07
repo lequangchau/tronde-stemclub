@@ -20,7 +20,7 @@ st.set_page_config(page_title="Phần mềm Trộn Đề Kiểm tra môn Vật L
 
 st.title("📝 Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí Online")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT (Căn đều 2 bên Justify, In đậm chữ HẾT, Bảo toàn 100% MathType/OMML, Hình ảnh & Lọc bỏ Lời giải).")
 
 st.divider()
 
@@ -95,7 +95,7 @@ def Has_Auto_Numbering(p):
         return True
     return False
 
-# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN (KHẮC PHỤC LỖI INDEXERROR & LỌC TAB THỪA)
+# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN
 def split_paragraph_options(p_elem):
     children = []
     for child in p_elem:
@@ -158,12 +158,13 @@ def split_paragraph_options(p_elem):
         })
     return options
 
-# 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (LÀM SẠCH TAB THỪA & ĐẦU CÂU)
+# 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (CỐ ĐỊNH CĂN ĐỀU 2 BÊN JUSTIFY & FONT TIMES NEW ROMAN 12PT)
 def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     elem_copied = Copy_Element_With_Media(p_elem, doc_src, doc_target, rid_map)
     doc_temp = Document()
     append_elem(doc_temp, elem_copied)
     p = doc_temp.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     
     pPr = p._element.pPr
     if pPr is not None and pPr.numPr is not None:
@@ -197,12 +198,12 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
     doc_temp = Document()
     append_elem(doc_temp, elem_copied)
     p = doc_temp.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     
     pPr = p._element.pPr
     if pPr is not None and pPr.numPr is not None:
         pPr.remove(pPr.numPr)
         
-    # Loại bỏ toàn bộ thẻ <w:tab/> tồn đọng từ đề gốc
     for tab in p._element.xpath('.//w:tab'):
         tab.getparent().remove(tab)
         
@@ -230,15 +231,15 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
         p._element.insert(0, r0._element)
     return p._element
 
-# 5. DÀN HÀNG ĐÁP ÁN PHẦN I CHUẨN THẨM MỸ (THẮT CHẶT ĐIỀU KIỆN & CĂN LỀ TAB CHUẨN A4)
+# 5. DÀN HÀNG ĐÁP ÁN PHẦN I CHUẨN THẨM MỸ (CĂN ĐỀU 2 BÊN JUSTIFY & TAB CHUẨN A4)
 def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
     total_len = sum(len(opt["text"]) for opt in opts)
     max_len = max(len(opt["text"]) for opt in opts) if opts else 0
     has_math = any("oMath" in opt["elem"].xml for opt in opts)
     
-    # Chỉ xếp 1 dòng nếu phương án cực ngắn và KHÔNG chứa công thức toán/lý phức tạp
     if total_len <= 28 and max_len <= 8 and len(opts) == 4 and not has_math:
         p_combined = Document().add_paragraph()
+        p_combined.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p_format = p_combined.paragraph_format
         p_format.space_before = Pt(0)
         p_format.space_after = Pt(2)
@@ -260,10 +261,9 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
                 
         append_elem(doc, p_combined._element)
         
-    # Xếp 2 dòng x 2 cột (Căn giữa trang bằng Tab 8.5 cm) cho các câu có độ dài vừa phải / chứa công thức
     elif total_len <= 100 and max_len <= 32 and len(opts) == 4:
-        # Dòng 1: A và B
         p_line1 = Document().add_paragraph()
+        p_line1.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p_line1.paragraph_format.space_before = Pt(0)
         p_line1.paragraph_format.space_after = Pt(1)
         p_line1.paragraph_format.tab_stops.add_tab_stop(Cm(8.5))
@@ -281,8 +281,8 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
                 r_t.font.size = Pt(12)
         append_elem(doc, p_line1._element)
         
-        # Dòng 2: C và D
         p_line2 = Document().add_paragraph()
+        p_line2.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p_line2.paragraph_format.space_before = Pt(0)
         p_line2.paragraph_format.space_after = Pt(2)
         p_line2.paragraph_format.tab_stops.add_tab_stop(Cm(8.5))
@@ -300,13 +300,13 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
                 r_t.font.size = Pt(12)
         append_elem(doc, p_line2._element)
         
-    # Xếp 4 dòng (mỗi lựa chọn 1 dòng) nếu câu dài
     else:
         for idx, opt in enumerate(opts):
             prefix = f"{nhan_p1[idx]} " if idx < len(nhan_p1) else ""
             elem = Lay_Noi_Dung_Phuong_An_Clean(opt["elem"], doc_src, doc, rid_map, prefix)
             doc_tmp = Document()
             append_elem(doc_tmp, elem)
+            doc_tmp.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             doc_tmp.paragraphs[0].paragraph_format.space_before = Pt(0)
             doc_tmp.paragraphs[0].paragraph_format.space_after = Pt(2)
             append_elem(doc, doc_tmp.paragraphs[0]._element)
@@ -333,7 +333,6 @@ def doc_de_goc(file_stream):
         if not full_line and not has_drawing:
             continue
 
-        # Kiểm tra tiêu đề các Phần
         if re.search(r'(?:\[?\s*PHAN[_\s]*3\s*\]?|PHẦN\s*(III|3)\b)', full_line, re.IGNORECASE):
             if current_item:
                 if current_section == 1: phan1.append(current_item)
@@ -362,7 +361,6 @@ def doc_de_goc(file_stream):
             in_solution = False
             continue
 
-        # NHẬN BIẾT CÂU HỎI MỚI (BẰNG CHỮ THỦ CÔNG HOẶC ĐÁNH SỐ TỰ ĐỘNG WORD BULLETS & NUMBERING)
         is_opt_line = bool(re.match(r'^[A-Da-d][\.\:\-\)\s]', full_line))
         is_auto_num = Has_Auto_Numbering(p)
         is_explicit_q = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', full_line, re.IGNORECASE)) or bool(re.match(r'^\d+[\.\:\-\)\s]', full_line))
@@ -460,7 +458,7 @@ uploaded_file = st.file_uploader("Bước 1: Tải lên file Word đề gốc (.
 if uploaded_file is not None:
     st.success(f"✅ Đã nhận file: **{uploaded_file.name}**")
 
-if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án", type="primary"):
+if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type="primary"):
     if uploaded_file is None:
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
@@ -566,6 +564,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         # 3. TRỘN PHẦN I
                         if phan1_goc:
                             p_head1 = doc.add_paragraph()
+                            p_head1.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
                             p_head1.paragraph_format.space_before = Pt(6)
                             p_head1.paragraph_format.space_after = Pt(4)
                             r_h1 = p_head1.add_run(f"PHẦN I. Thí sinh trả lời từ câu 1 đến câu {len(phan1_goc)}. Mỗi câu hỏi thí sinh chỉ chọn một phương án.")
@@ -580,7 +579,10 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                 
                                 for sub_elem in q["q_elems"][1:]:
                                     sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
-                                    append_elem(doc, sub_copied)
+                                    doc_tmp = Document()
+                                    append_elem(doc_tmp, sub_copied)
+                                    doc_tmp.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                                    append_elem(doc, doc_tmp.paragraphs[0]._element)
                                 
                                 opts = q["options"]
                                 correct_idx = q["correct_idx"]
@@ -599,6 +601,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         # 4. TRỘN PHẦN II
                         if phan2_goc:
                             p_head2 = doc.add_paragraph()
+                            p_head2.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
                             p_head2.paragraph_format.space_before = Pt(10)
                             p_head2.paragraph_format.space_after = Pt(4)
                             r_h2 = p_head2.add_run(f"PHẦN II. Thí sinh trả lời từ câu 1 đến câu {len(phan2_goc)}. Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn đúng hoặc sai.")
@@ -613,7 +616,10 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                 
                                 for sub_elem in q["q_elems"][1:]:
                                     sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
-                                    append_elem(doc, sub_copied)
+                                    doc_tmp = Document()
+                                    append_elem(doc_tmp, sub_copied)
+                                    doc_tmp.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                                    append_elem(doc, doc_tmp.paragraphs[0]._element)
                                 
                                 subs = q["sub_options"]
                                 random.shuffle(subs)
@@ -631,6 +637,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         # 5. TRỘN PHẦN III
                         if phan3_goc:
                             p_head3 = doc.add_paragraph()
+                            p_head3.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
                             p_head3.paragraph_format.space_before = Pt(10)
                             p_head3.paragraph_format.space_after = Pt(4)
                             r_h3 = p_head3.add_run(f"PHẦN III. Thí sinh trả lời từ câu 1 đến câu {len(phan3_goc)}.")
@@ -645,16 +652,22 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                 
                                 for sub_elem in q["q_elems"][1:]:
                                     sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
-                                    append_elem(doc, sub_copied)
+                                    doc_tmp = Document()
+                                    append_elem(doc_tmp, sub_copied)
+                                    doc_tmp.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                                    append_elem(doc, doc_tmp.paragraphs[0]._element)
                                     
                                 ma_de_answers[ma_de]['p3'].append(str(q["correct"]).strip())
 
-                        # 6. LỜI DẶN CHÂN TRANG
-                        p_foot1 = doc.add_paragraph("---Hết---")
+                        # 6. LỜI DẶN CHÂN TRANG (CĂN GIỮA & IN ĐẬM ---HẾT---)
+                        p_foot1 = doc.add_paragraph()
                         p_foot1.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         p_foot1.paragraph_format.space_before = Pt(12)
-                        r_f1 = p_foot1.runs[0]
-                        r_f1.font.name = 'Times New Roman'; r_f1.font.size = Pt(12)
+                        p_foot1.paragraph_format.space_after = Pt(2)
+                        r_f1 = p_foot1.add_run("---HẾT---")
+                        r_f1.bold = True
+                        r_f1.font.name = 'Times New Roman'
+                        r_f1.font.size = Pt(12)
                         
                         p_foot2 = doc.add_paragraph("Thí Sinh Không Được Sử Dụng Tài Liệu - Cán Bộ Coi Thi Không Giải Thích Gì Thêm.")
                         p_foot2.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -725,7 +738,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                     wb_excel.save(excel_io)
                     zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công!")
+                st.success("🎉 Trộn đề thành công! Văn bản toàn bộ các phần đã được căn đều 2 bên (Justify) và chữ ---HẾT--- đã được in đậm.")
                 st.download_button(
                     label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
