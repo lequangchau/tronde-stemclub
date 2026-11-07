@@ -20,7 +20,7 @@ st.set_page_config(page_title="Trộn Đề Kiểm tra môn Vật Lí", page_ico
 
 st.title("📝 Dự án CLB STEM: Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT (Hỗ trợ Câu hỏi chùm linh hoạt)")
 
 st.divider()
 
@@ -38,6 +38,14 @@ def get_node_text(node):
         elif child.tag.endswith('}tab'):
             text += "\t"
     return text
+
+def clean_mix_tags_from_elem(p_elem):
+    """Xóa các thẻ [MIX...], [END MIX...], [CHÙM...], [/CHÙM...] khỏi XML đoạn văn"""
+    pattern = re.compile(r'\[\/?\s*(?:END\s+MIX|ENDMIX|MIX|CHÙM|CHUM|CỤM|CUM)(?:[_\s]*\d+)?\s*\]', re.IGNORECASE)
+    for node in p_elem.iter():
+        if node.tag.endswith('}t') and node.text:
+            if pattern.search(node.text):
+                node.text = pattern.sub('', node.text)
 
 def Thiet_Lap_Font_Times_New_Roman(doc):
     style = doc.styles['Normal']
@@ -81,6 +89,7 @@ def Set_Paragraph_Justify_And_Zero_Indent(p):
 def Copy_Element_With_Media(p_elem, doc_src, doc_target, rid_map):
     """Deep copy XML element và re-map chính xác các rId hình ảnh sang doc_target"""
     elem = copy.deepcopy(p_elem)
+    clean_mix_tags_from_elem(elem)
     for node in elem.iter():
         for attr_name in list(node.attrib.keys()):
             if attr_name.endswith('}embed') or attr_name.endswith('}id'):
@@ -126,7 +135,7 @@ def Has_Auto_Numbering(p):
         return True
     return False
 
-# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN (ĐÃ TỐI ƯU LINH HOẠT VỚI KHOẢNG TRẮNG THỤT LỀ)
+# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN
 def split_paragraph_options(p_elem):
     children = [child for child in p_elem if not child.tag.endswith('}pPr')]
     if not children:
@@ -144,7 +153,6 @@ def split_paragraph_options(p_elem):
             full_str += ch
             char_to_child_idx.append(idx)
 
-    # Tìm các vị trí thỏa mãn nhãn phương án có dấu phân cách [. : - )]
     cand_pattern = re.compile(r'(?:^|[\s\t\xa0]+)([A-Da-d][\.\:\-\)])')
     all_cands = list(cand_pattern.finditer(full_str))
 
@@ -153,7 +161,6 @@ def split_paragraph_options(p_elem):
         clean_text = re.sub(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]*', '', full_text).strip()
         return [{"elem": p_elem, "text": clean_text, "is_under": False}]
 
-    # Lọc danh sách khớp: chấp nhận nhãn đầu tiên nếu phía trước chỉ là khoảng trắng/tab
     valid_matches = []
     expected_char_codes = None
     
@@ -162,12 +169,11 @@ def split_paragraph_options(p_elem):
         lbl_code = ord(lbl.upper())
         
         if not valid_matches:
-            # Phương án đầu tiên: phía trước chỉ chứa khoảng trắng/tab (linh hoạt với mọi độ dài thụt lề)
             if full_str[:m.start(1)].strip() == "":
                 valid_matches.append(m)
                 expected_char_codes = [lbl_code + 1]
         else:
-            if lbl_code in expected_char_codes: # Phương án tiếp theo phải đúng thứ tự bảng chữ cái
+            if lbl_code in expected_char_codes:
                 valid_matches.append(m)
                 expected_char_codes = [lbl_code + 1]
 
@@ -224,7 +230,7 @@ def split_paragraph_options(p_elem):
         })
     return groups
 
-# 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (XÓA SẠCH TAB THỪA, BẢO TOÀN NGUYÊN VẸN TỪ NGỮ CÂU HỎI)
+# 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN
 def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     elem_copied = Copy_Element_With_Media(p_elem, doc_src, doc_target, rid_map)
     doc_temp = Document()
@@ -232,7 +238,6 @@ def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     p = doc_temp.paragraphs[0]
     Set_Paragraph_Justify_And_Zero_Indent(p)
     
-    # Xóa sạch các thẻ <w:tab/> thừa trước khi tính độ dài chuỗi
     for tab in p._element.xpath('.//w:tab'):
         tab.getparent().remove(tab)
         
@@ -266,7 +271,6 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
     p = doc_temp.paragraphs[0]
     Set_Paragraph_Justify_And_Zero_Indent(p)
     
-    # Xóa sạch các thẻ <w:tab/> thừa trước khi tính độ dài chuỗi
     for tab in p._element.xpath('.//w:tab'):
         tab.getparent().remove(tab)
         
@@ -294,7 +298,7 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
         p._element.pPr.addnext(r0._element)
     return p._element
 
-# 5. DÀN HÀNG ĐÁP ÁN PHẦN I CHUẨN THẨM MỸ (CĂN ĐỀU 2 BÊN, KHÔNG THỤT LỀ, TAB CHUẨN A4)
+# 5. DÀN HÀNG ĐÁP ÁN PHẦN I CHUẨN THẨM MỸ
 def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
     total_len = sum(len(opt["text"]) for opt in opts)
     max_len = max(len(opt["text"]) for opt in opts) if opts else 0
@@ -377,12 +381,28 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
             doc_tmp.paragraphs[0].paragraph_format.space_after = Pt(2)
             append_elem(doc, doc_tmp.paragraphs[0]._element)
 
-# 6. ĐỌC VÀ XÁC ĐỊNH CÔNG THỨC & NỘI DUNG CÂU HỎI
+def Render_Cau_Dan_Chum(doc, start_q, end_q):
+    """Tự động tạo câu dẫn mở đầu cho khối câu hỏi chùm với định dạng chuẩn"""
+    p = doc.add_paragraph()
+    Set_Paragraph_Justify_And_Zero_Indent(p)
+    p.paragraph_format.space_before = Pt(6)
+    p.paragraph_format.space_after = Pt(2)
+    
+    lead_text = f"Thông tin dưới đây được sử dụng từ câu {start_q} đến câu {end_q}:"
+    r = p.add_run(lead_text)
+    r.font.name = 'Times New Roman'
+    r.font.size = Pt(12)
+    r.bold = True
+    r.italic = True
+
+# 6. ĐỌC VÀ XÁC ĐỊNH CẤU TRÚC ĐỀ GỐC (HỖ TRỢ THẺ [MIX] VÀ [END MIX])
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
-    phan1, phan2, phan3 = [], [], []
+    phan1_blocks, phan2_blocks, phan3_blocks = [], [], []
     current_section = None
     current_item = None
+    current_cluster = None
+    in_cluster = False
     in_solution = False
 
     def is_sol_header(line):
@@ -392,6 +412,33 @@ def doc_de_goc(file_stream):
     def is_sec_header(line):
         return bool(re.search(r'(?:\[?\s*PHAN[_\s]*[123]\s*\]?|PHẦN\s*(I|II|III|1|2|3)\b)', line, re.IGNORECASE))
 
+    def is_mix_start(line):
+        return bool(re.search(r'\[\s*(?:MIX|CHÙM|CHUM|CỤM|CUM)(?:[_\s]*\d+)?\s*\]', line, re.IGNORECASE)) and not bool(re.search(r'\[\s*END\s+(?:MIX|CHÙM|CHUM|CỤM|CUM)', line, re.IGNORECASE))
+
+    def is_mix_end(line):
+        return bool(re.search(r'\[\/?\s*(?:END\s+MIX|ENDMIX|\/MIX|\/CHÙM|\/CHUM|\/CỤM|\/CUM)(?:[_\s]*\d+)?\s*\]', line, re.IGNORECASE))
+
+    def flush_item_to_current_block():
+        nonlocal current_item, current_cluster, in_cluster, current_section
+        if not current_item:
+            return
+        target_blocks = phan1_blocks if current_section == 1 else (phan2_blocks if current_section == 2 else phan3_blocks)
+        if in_cluster and current_cluster:
+            current_cluster["items"].append(current_item)
+        else:
+            target_blocks.append({"is_cluster": False, "item": current_item})
+        current_item = None
+
+    def flush_cluster_to_blocks():
+        nonlocal current_cluster, in_cluster, current_section
+        flush_item_to_current_block()
+        if in_cluster and current_cluster:
+            target_blocks = phan1_blocks if current_section == 1 else (phan2_blocks if current_section == 2 else phan3_blocks)
+            if len(current_cluster["items"]) > 0:
+                target_blocks.append(current_cluster)
+            current_cluster = None
+            in_cluster = False
+
     for p in doc.paragraphs:
         full_line = get_node_text(p._element).strip()
         has_drawing = ("drawing" in p._element.xml or "graphic" in p._element.xml or "pict" in p._element.xml or "oMath" in p._element.xml)
@@ -399,38 +446,39 @@ def doc_de_goc(file_stream):
         if not full_line and not has_drawing:
             continue
 
+        # Kiểm tra chuyển phần (Phần I, II, III)
         if re.search(r'(?:\[?\s*PHAN[_\s]*3\s*\]?|PHẦN\s*(III|3)\b)', full_line, re.IGNORECASE):
-            if current_item:
-                if current_section == 1: phan1.append(current_item)
-                elif current_section == 2: phan2.append(current_item)
-                elif current_section == 3: phan3.append(current_item)
-                current_item = None
+            flush_cluster_to_blocks()
             current_section = 3
             in_solution = False
             continue
         elif re.search(r'(?:\[?\s*PHAN[_\s]*2\s*\]?|PHẦN\s*(II|2)\b)', full_line, re.IGNORECASE):
-            if current_item:
-                if current_section == 1: phan1.append(current_item)
-                elif current_section == 2: phan2.append(current_item)
-                elif current_section == 3: phan3.append(current_item)
-                current_item = None
+            flush_cluster_to_blocks()
             current_section = 2
             in_solution = False
             continue
         elif re.search(r'(?:\[?\s*PHAN[_\s]*1\s*\]?|PHẦN\s*(I|1)\b)', full_line, re.IGNORECASE):
-            if current_item:
-                if current_section == 1: phan1.append(current_item)
-                elif current_section == 2: phan2.append(current_item)
-                elif current_section == 3: phan3.append(current_item)
-                current_item = None
+            flush_cluster_to_blocks()
             current_section = 1
             in_solution = False
             continue
 
+        # Kiểm tra thẻ [END MIX]
+        if is_mix_end(full_line):
+            flush_cluster_to_blocks()
+            continue
+
+        # Kiểm tra thẻ [MIX]
+        if is_mix_start(full_line):
+            flush_cluster_to_blocks()
+            in_cluster = True
+            current_cluster = {"is_cluster": True, "intro_elems": [], "items": []}
+            clean_text = re.sub(r'\[\/?\s*(?:END\s+MIX|ENDMIX|MIX|CHÙM|CHUM|CỤM|CUM)(?:[_\s]*\d+)?\s*\]', '', full_line, flags=re.IGNORECASE).strip()
+            if not clean_text and not has_drawing:
+                continue
+
         is_explicit_q = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', full_line, re.IGNORECASE)) or bool(re.match(r'^\d+[\.\:\-\)]', full_line))
         is_auto_num = Has_Auto_Numbering(p)
-        
-        # Bắt buộc nhãn phương án phải có dấu phân cách [. : - )] đi kèm
         is_opt_line = bool(re.match(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)]', full_line))
         
         is_question = False
@@ -447,13 +495,14 @@ def doc_de_goc(file_stream):
 
         if is_question:
             in_solution = False
+            flush_item_to_current_block()
 
         if is_sol_header(full_line):
             in_solution = True
 
+        # Đọc dữ liệu theo từng Phần
         if current_section == 1:
             if is_question:
-                if current_item: phan1.append(current_item)
                 current_item = {"q_elems": [p._element], "options": [], "correct_idx": None}
             elif current_item and not in_solution:
                 if is_opt_line:
@@ -474,10 +523,11 @@ def doc_de_goc(file_stream):
                     if m_ans:
                         ans_char = m_ans.group(1).upper()
                         current_item["correct_idx"] = ord(ans_char) - ord('A')
+            elif current_item is None and in_cluster and current_cluster:
+                current_cluster["intro_elems"].append(p._element)
 
         elif current_section == 2:
             if is_question:
-                if current_item: phan2.append(current_item)
                 current_item = {"q_elems": [p._element], "sub_options": []}
             elif current_item and not in_solution:
                 if is_opt_line:
@@ -490,10 +540,11 @@ def doc_de_goc(file_stream):
                     })
                 elif len(current_item["sub_options"]) == 0:
                     current_item["q_elems"].append(p._element)
+            elif current_item is None and in_cluster and current_cluster:
+                current_cluster["intro_elems"].append(p._element)
 
         elif current_section == 3:
             if is_question:
-                if current_item: phan3.append(current_item)
                 current_item = {"q_elems": [p._element], "correct": ""}
             elif current_item:
                 if is_sol_header(full_line):
@@ -505,15 +556,13 @@ def doc_de_goc(file_stream):
                         current_item["correct"] = full_line.strip()
                 elif not in_solution:
                     current_item["q_elems"].append(p._element)
+            elif current_item is None and in_cluster and current_cluster:
+                current_cluster["intro_elems"].append(p._element)
 
-    if current_item:
-        if current_section == 1: phan1.append(current_item)
-        elif current_section == 2: phan2.append(current_item)
-        elif current_section == 3: phan3.append(current_item)
+    flush_cluster_to_blocks()
+    return doc, phan1_blocks, phan2_blocks, phan3_blocks
 
-    return doc, phan1, phan2, phan3
-
-# 7. THIẾT LẬP THÔNG TIN
+# 7. THIẾT LẬP THÔNG TIN GIAO DIỆN STREAMLIT
 with st.expander("⚙️ **THÔNG TIN TIÊU ĐỀ ĐỀ KIỂM TRA & CÁC MÃ ĐỀ**", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
@@ -541,11 +590,15 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
             if not danh_sach_ma_de:
                 danh_sach_ma_de = ["1021", "1022", "1023", "1024"]
                 
-            tong_so_cau = len(phan1_goc) + len(phan2_goc) + len(phan3_goc)
+            num_p1_total = sum(len(b["items"]) if b.get("is_cluster") else 1 for b in phan1_goc)
+            num_p2_total = sum(len(b["items"]) if b.get("is_cluster") else 1 for b in phan2_goc)
+            num_p3_total = sum(len(b["items"]) if b.get("is_cluster") else 1 for b in phan3_goc)
+            
+            tong_so_cau = num_p1_total + num_p2_total + num_p3_total
             if tong_so_cau == 0:
                 st.error("❌ **Không tìm thấy câu hỏi!** Vui lòng kiểm tra lại định dạng đề gốc.")
             else:
-                st.info(f"📊 Đã phân tích: **{len(phan1_goc)}** câu Phần I | **{len(phan2_goc)}** câu Phần II | **{len(phan3_goc)}** câu Phần III")
+                st.info(f"📊 Đã phân tích: **{num_p1_total}** câu Phần I | **{num_p2_total}** câu Phần II | **{num_p3_total}** câu Phần III")
                 
                 zip_buffer = io.BytesIO()
                 ma_de_answers = {}
@@ -585,9 +638,9 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         r_truong.font.name = 'Times New Roman'; r_truong.font.size = Pt(11)
                         
                         sec_notes = []
-                        if len(phan1_goc) > 0: sec_notes.append(f"{len(phan1_goc)} TN")
-                        if len(phan2_goc) > 0: sec_notes.append(f"{len(phan2_goc)} ĐS")
-                        if len(phan3_goc) > 0: sec_notes.append(f"{len(phan3_goc)} TL Ngắn")
+                        if num_p1_total > 0: sec_notes.append(f"{num_p1_total} TN")
+                        if num_p2_total > 0: sec_notes.append(f"{num_p2_total} ĐS")
+                        if num_p3_total > 0: sec_notes.append(f"{num_p3_total} TL Ngắn")
                         note_str = f"({', '.join(sec_notes)})" if sec_notes else ""
                         
                         p_r = cell_right.paragraphs[0]
@@ -633,42 +686,91 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         nhan_p1_excel = ["A", "B", "C", "D"]
                         nhan_p2_word = ["a)", "b)", "c)", "d)"]
 
-                        # 3. TRỘN PHẦN I
+                        # 3. TRỘN PHẦN I (TRỘN KHỐI BẤT KỲ VÀ TỰ ĐỘNG SINH CÂU DẪN)
                         if phan1_goc:
                             p_head1 = doc.add_paragraph()
                             Set_Paragraph_Justify_And_Zero_Indent(p_head1)
                             p_head1.paragraph_format.space_before = Pt(6)
                             p_head1.paragraph_format.space_after = Pt(4)
-                            r_h1 = p_head1.add_run(f"PHẦN I. Thí sinh trả lời từ câu 1 đến câu {len(phan1_goc)}. Mỗi câu hỏi thí sinh chỉ chọn một phương án.")
+                            r_h1 = p_head1.add_run(f"PHẦN I. Thí sinh trả lời từ câu 1 đến câu {num_p1_total}. Mỗi câu hỏi thí sinh chỉ chọn một phương án.")
                             r_h1.bold = True
                             r_h1.font.name = 'Times New Roman'; r_h1.font.size = Pt(12)
 
-                            p1_shuffled = copy.deepcopy(phan1_goc)
-                            random.shuffle(p1_shuffled)
-                            for idx, q in enumerate(p1_shuffled):
-                                updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {idx + 1}: ")
-                                append_elem(doc, updated_q0)
-                                
-                                for sub_elem in q["q_elems"][1:]:
-                                    sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
-                                    doc_tmp = Document()
-                                    append_elem(doc_tmp, sub_copied)
-                                    Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                    append_elem(doc, doc_tmp.paragraphs[0]._element)
-                                
-                                opts = q["options"]
-                                correct_idx = q["correct_idx"]
-                                for o_i, opt in enumerate(opts):
-                                    opt["is_correct"] = (o_i == correct_idx)
-                                
-                                random.shuffle(opts)
-                                correct_label = "A"
-                                for o_idx, opt in enumerate(opts):
-                                    if opt["is_correct"]:
-                                        correct_label = nhan_p1_excel[o_idx] if o_idx < len(nhan_p1_excel) else "A"
-                                
-                                Render_Phuong_An_Phan_1(doc, doc_goc_obj, rid_map, opts, nhan_p1_word)
-                                ma_de_answers[ma_de]['p1'].append(correct_label)
+                            p1_shuffled_blocks = copy.deepcopy(phan1_goc)
+                            random.shuffle(p1_shuffled_blocks)
+                            current_q_idx = 1
+
+                            for block in p1_shuffled_blocks:
+                                if not block.get("is_cluster"):
+                                    q = block["item"]
+                                    updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {current_q_idx}: ")
+                                    append_elem(doc, updated_q0)
+                                    
+                                    for sub_elem in q["q_elems"][1:]:
+                                        sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
+                                        doc_tmp = Document()
+                                        append_elem(doc_tmp, sub_copied)
+                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                    
+                                    opts = q["options"]
+                                    correct_idx = q["correct_idx"]
+                                    for o_i, opt in enumerate(opts):
+                                        opt["is_correct"] = (o_i == correct_idx)
+                                    
+                                    random.shuffle(opts)
+                                    correct_label = "A"
+                                    for o_idx, opt in enumerate(opts):
+                                        if opt["is_correct"]:
+                                            correct_label = nhan_p1_excel[o_idx] if o_idx < len(nhan_p1_excel) else "A"
+                                    
+                                    Render_Phuong_An_Phan_1(doc, doc_goc_obj, rid_map, opts, nhan_p1_word)
+                                    ma_de_answers[ma_de]['p1'].append(correct_label)
+                                    current_q_idx += 1
+                                else:
+                                    c_items = block["items"]
+                                    random.shuffle(c_items)
+                                    k_count = len(c_items)
+                                    start_q = current_q_idx
+                                    end_q = current_q_idx + k_count - 1
+                                    
+                                    # 1. Thêm câu dẫn vào chùm
+                                    Render_Cau_Dan_Chum(doc, start_q, end_q)
+                                    
+                                    # 2. Thêm các đoạn ngữ cảnh (văn bản, đồ thị, hình ảnh...)
+                                    for intro_elem in block["intro_elems"]:
+                                        intro_copied = Copy_Element_With_Media(intro_elem, doc_goc_obj, doc, rid_map)
+                                        doc_tmp = Document()
+                                        append_elem(doc_tmp, intro_copied)
+                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        
+                                    # 3. Thêm từng câu hỏi trong chùm
+                                    for q in c_items:
+                                        updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {current_q_idx}: ")
+                                        append_elem(doc, updated_q0)
+                                        
+                                        for sub_elem in q["q_elems"][1:]:
+                                            sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
+                                            doc_tmp = Document()
+                                            append_elem(doc_tmp, sub_copied)
+                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        
+                                        opts = q["options"]
+                                        correct_idx = q["correct_idx"]
+                                        for o_i, opt in enumerate(opts):
+                                            opt["is_correct"] = (o_i == correct_idx)
+                                        
+                                        random.shuffle(opts)
+                                        correct_label = "A"
+                                        for o_idx, opt in enumerate(opts):
+                                            if opt["is_correct"]:
+                                                correct_label = nhan_p1_excel[o_idx] if o_idx < len(nhan_p1_excel) else "A"
+                                        
+                                        Render_Phuong_An_Phan_1(doc, doc_goc_obj, rid_map, opts, nhan_p1_word)
+                                        ma_de_answers[ma_de]['p1'].append(correct_label)
+                                        current_q_idx += 1
 
                         # 4. TRỘN PHẦN II
                         if phan2_goc:
@@ -676,60 +778,139 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                             Set_Paragraph_Justify_And_Zero_Indent(p_head2)
                             p_head2.paragraph_format.space_before = Pt(10)
                             p_head2.paragraph_format.space_after = Pt(4)
-                            r_h2 = p_head2.add_run(f"PHẦN II. Thí sinh trả lời từ câu 1 đến câu {len(phan2_goc)}. Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn đúng hoặc sai.")
+                            r_h2 = p_head2.add_run(f"PHẦN II. Thí sinh trả lời từ câu 1 đến câu {num_p2_total}. Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn đúng hoặc sai.")
                             r_h2.bold = True
                             r_h2.font.name = 'Times New Roman'; r_h2.font.size = Pt(12)
 
-                            p2_shuffled = copy.deepcopy(phan2_goc)
-                            random.shuffle(p2_shuffled)
-                            for idx, q in enumerate(p2_shuffled):
-                                updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {idx + 1}: ")
-                                append_elem(doc, updated_q0)
-                                
-                                for sub_elem in q["q_elems"][1:]:
-                                    sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
-                                    doc_tmp = Document()
-                                    append_elem(doc_tmp, sub_copied)
-                                    Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                    append_elem(doc, doc_tmp.paragraphs[0]._element)
-                                
-                                subs = q["sub_options"]
-                                random.shuffle(subs)
-                                ans_chars = []
-                                for s_idx, sub in enumerate(subs):
-                                    prefix = f"{nhan_p2_word[s_idx]} " if s_idx < len(nhan_p2_word) else ""
-                                    elem = Lay_Noi_Dung_Phuong_An_Clean(sub["elem"], doc_goc_obj, doc, rid_map, prefix)
-                                    append_elem(doc, elem)
-                                    
-                                    char = "Đ" if sub["is_correct"] == "Đúng" else "S"
-                                    ans_chars.append(char)
-                                    
-                                ma_de_answers[ma_de]['p2'].append("".join(ans_chars))
+                            p2_shuffled_blocks = copy.deepcopy(phan2_goc)
+                            random.shuffle(p2_shuffled_blocks)
+                            current_q_idx = 1
 
-                        # 5. TRỘN PHẦN III
+                            for block in p2_shuffled_blocks:
+                                if not block.get("is_cluster"):
+                                    q = block["item"]
+                                    updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {current_q_idx}: ")
+                                    append_elem(doc, updated_q0)
+                                    
+                                    for sub_elem in q["q_elems"][1:]:
+                                        sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
+                                        doc_tmp = Document()
+                                        append_elem(doc_tmp, sub_copied)
+                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                    
+                                    subs = q["sub_options"]
+                                    random.shuffle(subs)
+                                    ans_chars = []
+                                    for s_idx, sub in enumerate(subs):
+                                        prefix = f"{nhan_p2_word[s_idx]} " if s_idx < len(nhan_p2_word) else ""
+                                        elem = Lay_Noi_Dung_Phuong_An_Clean(sub["elem"], doc_goc_obj, doc, rid_map, prefix)
+                                        append_elem(doc, elem)
+                                        
+                                        char = "Đ" if sub["is_correct"] == "Đúng" else "S"
+                                        ans_chars.append(char)
+                                        
+                                    ma_de_answers[ma_de]['p2'].append("".join(ans_chars))
+                                    current_q_idx += 1
+                                else:
+                                    c_items = block["items"]
+                                    random.shuffle(c_items)
+                                    k_count = len(c_items)
+                                    start_q = current_q_idx
+                                    end_q = current_q_idx + k_count - 1
+                                    
+                                    Render_Cau_Dan_Chum(doc, start_q, end_q)
+                                    
+                                    for intro_elem in block["intro_elems"]:
+                                        intro_copied = Copy_Element_With_Media(intro_elem, doc_goc_obj, doc, rid_map)
+                                        doc_tmp = Document()
+                                        append_elem(doc_tmp, intro_copied)
+                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        
+                                    for q in c_items:
+                                        updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {current_q_idx}: ")
+                                        append_elem(doc, updated_q0)
+                                        
+                                        for sub_elem in q["q_elems"][1:]:
+                                            sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
+                                            doc_tmp = Document()
+                                            append_elem(doc_tmp, sub_copied)
+                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        
+                                        subs = q["sub_options"]
+                                        random.shuffle(subs)
+                                        ans_chars = []
+                                        for s_idx, sub in enumerate(subs):
+                                            prefix = f"{nhan_p2_word[s_idx]} " if s_idx < len(nhan_p2_word) else ""
+                                            elem = Lay_Noi_Dung_Phuong_An_Clean(sub["elem"], doc_goc_obj, doc, rid_map, prefix)
+                                            append_elem(doc, elem)
+                                            
+                                            char = "Đ" if sub["is_correct"] == "Đúng" else "S"
+                                            ans_chars.append(char)
+                                            
+                                        ma_de_answers[ma_de]['p2'].append("".join(ans_chars))
+                                        current_q_idx += 1
+
+                        # 5. TRỘN PHẦN III (HỖ TRỢ TRỘN CÂU HỎI CHÙM)
                         if phan3_goc:
                             p_head3 = doc.add_paragraph()
                             Set_Paragraph_Justify_And_Zero_Indent(p_head3)
                             p_head3.paragraph_format.space_before = Pt(10)
                             p_head3.paragraph_format.space_after = Pt(4)
-                            r_h3 = p_head3.add_run(f"PHẦN III. Thí sinh trả lời từ câu 1 đến câu {len(phan3_goc)}.")
+                            r_h3 = p_head3.add_run(f"PHẦN III. Thí sinh trả lời từ câu 1 đến câu {num_p3_total}.")
                             r_h3.bold = True
                             r_h3.font.name = 'Times New Roman'; r_h3.font.size = Pt(12)
 
-                            p3_shuffled = copy.deepcopy(phan3_goc)
-                            random.shuffle(p3_shuffled)
-                            for idx, q in enumerate(p3_shuffled):
-                                updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {idx + 1}: ")
-                                append_elem(doc, updated_q0)
-                                
-                                for sub_elem in q["q_elems"][1:]:
-                                    sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
-                                    doc_tmp = Document()
-                                    append_elem(doc_tmp, sub_copied)
-                                    Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                    append_elem(doc, doc_tmp.paragraphs[0]._element)
+                            p3_shuffled_blocks = copy.deepcopy(phan3_goc)
+                            random.shuffle(p3_shuffled_blocks)
+                            current_q_idx = 1
+
+                            for block in p3_shuffled_blocks:
+                                if not block.get("is_cluster"):
+                                    q = block["item"]
+                                    updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {current_q_idx}: ")
+                                    append_elem(doc, updated_q0)
                                     
-                                ma_de_answers[ma_de]['p3'].append(str(q["correct"]).strip())
+                                    for sub_elem in q["q_elems"][1:]:
+                                        sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
+                                        doc_tmp = Document()
+                                        append_elem(doc_tmp, sub_copied)
+                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        
+                                    ma_de_answers[ma_de]['p3'].append(str(q["correct"]).strip())
+                                    current_q_idx += 1
+                                else:
+                                    c_items = block["items"]
+                                    random.shuffle(c_items)
+                                    k_count = len(c_items)
+                                    start_q = current_q_idx
+                                    end_q = current_q_idx + k_count - 1
+                                    
+                                    Render_Cau_Dan_Chum(doc, start_q, end_q)
+                                    
+                                    for intro_elem in block["intro_elems"]:
+                                        intro_copied = Copy_Element_With_Media(intro_elem, doc_goc_obj, doc, rid_map)
+                                        doc_tmp = Document()
+                                        append_elem(doc_tmp, intro_copied)
+                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        
+                                    for q in c_items:
+                                        updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {current_q_idx}: ")
+                                        append_elem(doc, updated_q0)
+                                        
+                                        for sub_elem in q["q_elems"][1:]:
+                                            sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
+                                            doc_tmp = Document()
+                                            append_elem(doc_tmp, sub_copied)
+                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                            
+                                        ma_de_answers[ma_de]['p3'].append(str(q["correct"]).strip())
+                                        current_q_idx += 1
 
                         # 6. LỜI DẶN CHÂN TRANG (CĂN GIỮA & IN ĐẬM ---HẾT---)
                         p_foot1 = doc.add_paragraph()
@@ -750,12 +931,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         doc.save(doc_io)
                         zip_file.writestr(f"{ma_de}.docx", doc_io.getvalue())
                     
-                    # --- XUẤT FILE EXCEL ĐÁP ÁN MATRẬN ĐỒNG BỘ 100% THEO FILE MẪU DAP AN ---
+                    # --- XUẤT FILE EXCEL ĐÁP ÁN MATRẬN ĐỒNG BỘ 100% ---
                     wb_excel = openpyxl.Workbook()
                     ws_excel = wb_excel.active
                     ws_excel.title = "Sheet1"
 
-                    # Dòng 1: Tiêu đề Cột
                     header = ['Câu']
                     for m in danh_sach_ma_de:
                         header.append(int(m) if str(m).isdigit() else str(m))
@@ -766,21 +946,18 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                     num_p2 = len(ma_de_answers[first_md]['p2'])
                     num_p3 = len(ma_de_answers[first_md]['p3'])
 
-                    # Dòng Phần I (1 đến N câu)
                     for i in range(num_p1):
                         row = [i + 1]
                         for md in danh_sach_ma_de:
                             row.append(ma_de_answers[md]['p1'][i])
                         ws_excel.append(row)
 
-                    # Dòng Phần II (Gộp 4 ý thành 1 ô chuỗi 4 ký tự: ĐSĐS...)
                     for i in range(num_p2):
                         row = [i + 1]
                         for md in danh_sach_ma_de:
                             row.append(ma_de_answers[md]['p2'][i])
                         ws_excel.append(row)
 
-                    # Dòng Phần III (Định dạng số nguyên là int, số thập phân là string General)
                     for i in range(num_p3):
                         row = [i + 1]
                         for md in danh_sach_ma_de:
@@ -790,7 +967,6 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                             row.append(val)
                         ws_excel.append(row)
 
-                    # Định dạng hiển thị chuẩn mực theo file DAP AN_K10TN.xlsx
                     align_center = Alignment(horizontal='center', vertical='center')
                     font_header = Font(name='Calibri', size=11, bold=True)
                     font_cell = Font(name='Calibri', size=11, bold=False)
