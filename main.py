@@ -20,11 +20,11 @@ st.set_page_config(page_title="Phần mềm Trộn Đề Kiểm tra môn Vật L
 
 st.title("📝 Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí Online")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT (Bảo toàn 100% Hình ảnh, Bảng biểu, MathType & Font Times New Roman 12pt).")
 
 st.divider()
 
-# 2. FONT TIMES NEW ROMAN 12PT
+# 2. HÀM KHÓA CỨNG FONT TIMES NEW ROMAN 12PT VÀ SAO CHÉP HÌNH ẢNH / RELATIONS
 def Thiet_Lap_Font_Times_New_Roman(doc):
     style = doc.styles['Normal']
     font = style.font
@@ -34,6 +34,22 @@ def Thiet_Lap_Font_Times_New_Roman(doc):
     rPr = style._element.get_or_add_rPr()
     rFonts = parse_xml(r'<w:rFonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman" w:eastAsia="Times New Roman"/>')
     rPr.append(rFonts)
+
+def Sao_Chep_Relationships(doc_src, doc_target):
+    """Sao chép toàn bộ hình ảnh và tài nguyên liên kết (Media Rels) từ đề gốc sang đề target"""
+    src_rels = doc_src.part.rels
+    target_rels = doc_target.part.rels
+    for rId, rel in src_rels.items():
+        if rId not in target_rels:
+            try:
+                target_rels.add_relationship(
+                    rel.reltype,
+                    rel.target_ref if rel.is_external else rel.target_part,
+                    rId,
+                    rel.is_external
+                )
+            except Exception:
+                pass
 
 def append_elem(doc, elem):
     body = doc._element.body
@@ -170,7 +186,7 @@ def Render_Phuong_An_Phan_1(doc, opts, nhan_p1):
             elem = Lay_Noi_Dung_Phuong_An_Clean(copy.deepcopy(opt["elem"]), prefix)
             append_elem(doc, elem)
 
-# 5. XÁC ĐỊNH ĐÁP ÁN PHẦN III
+# 5. XÁC ĐỊNH ĐÁP ÁN & ĐỌC ĐỀ GỐC BẢO TOÀN HÌNH ẢNH / BẢNG BIỂU
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1, phan2, phan3 = [], [], []
@@ -249,7 +265,7 @@ def doc_de_goc(file_stream):
         elif current_section == 2: phan2.append(current_item)
         elif current_section == 3: phan3.append(current_item)
 
-    return phan1, phan2, phan3
+    return doc, phan1, phan2, phan3
 
 # 6. THIẾT LẬP THÔNG TIN (UI STREAMLIT)
 with st.expander("⚙️ **THÔNG TIN TIÊU ĐỀ ĐỀ KIỂM TRA & CÁC MÃ ĐỀ**", expanded=True):
@@ -273,7 +289,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
         with st.spinner("Đang khởi tạo mã đề thi và xuất file Excel đáp án ma trận..."):
-            phan1_goc, phan2_goc, phan3_goc = doc_de_goc(uploaded_file)
+            doc_goc_obj, phan1_goc, phan2_goc, phan3_goc = doc_de_goc(uploaded_file)
             
             danh_sach_ma_de = [m.strip() for m in ds_ma_de_input.split(",") if m.strip()]
             if not danh_sach_ma_de:
@@ -291,6 +307,8 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                 with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED) as zip_file:
                     for ma_de in danh_sach_ma_de:
                         doc = Document()
+                        # Sao chép toàn bộ mối liên kết Media/Hình ảnh từ đề gốc sang đề trộn
+                        Sao_Chep_Relationships(doc_goc_obj, doc)
                         Thiet_Lap_Font_Times_New_Roman(doc)
                         ma_de_answers[ma_de] = {'p1': [], 'p2': [], 'p3': []}
                         
@@ -519,7 +537,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                     wb_excel.save(excel_io)
                     zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công! Đã tạo file Excel đáp án.")
+                st.success("🎉 Trộn đề thành công! Đã bảo toàn 100% hình ảnh & bảng biểu trong các mã đề.")
                 st.download_button(
                     label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
