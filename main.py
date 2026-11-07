@@ -20,19 +20,20 @@ st.set_page_config(page_title="Phần mềm Trộn Đề Kiểm tra môn Vật L
 
 st.title("📝 Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí Online")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT (Bảo toàn 100% Công thức MathType/OMML, Hình ảnh, Đồ thị, Đánh số tự động & Lọc bỏ Lời giải).")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT (Hỗ trợ Tách nhiều đáp án cùng dòng, Bảo toàn 100% Công thức MathType/OMML, Hình ảnh, Đồ thị, Đánh số tự động & Lọc bỏ Lời giải).")
 
 st.divider()
 
-# 2. HÀM TRÍCH XUẤT VĂN BẢN TOÀN DIỆN (BAO GỒM CẢ THẺ CÔNG THỨC <m:oMath>)
-def get_full_text(p_elem):
+# 2. HÀM TRÍCH XUẤT VĂN BẢN VÀ XỬ LÝ XML CÔNG THỨC & HÌNH ẢNH
+def get_node_text(node):
     """Trích xuất toàn bộ chữ trong đoạn văn XML, bao gồm chữ thường (<w:t>) và công thức toán (<m:t>)"""
-    texts = []
-    for node in p_elem.iter():
-        if node.tag.endswith('}t'):
-            if node.text:
-                texts.append(node.text)
-    return "".join(texts)
+    if node.tag.endswith('}t'):
+        return node.text or ""
+    text = ""
+    for child in node.iter():
+        if child.tag.endswith('}t'):
+            text += child.text or ""
+    return text
 
 def Thiet_Lap_Font_Times_New_Roman(doc):
     style = doc.styles['Normal']
@@ -94,7 +95,74 @@ def Has_Auto_Numbering(p):
         return True
     return False
 
-# 3. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (BẢO TOÀN CÔNG THỨC TOÁN & FONT TIMES NEW ROMAN 12PT)
+# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN (KHẮC PHỤC LỖI INDEXERROR)
+def split_paragraph_options(p_elem):
+    """
+    Tách đoạn văn XML chứa nhiều đáp án trên cùng 1 dòng (ví dụ A. ... B. ...) 
+    thành các đoạn văn XML riêng biệt, bảo toàn 100% công thức toán OMML/MathType.
+    """
+    children = []
+    for child in p_elem:
+        if not child.tag.endswith('}pPr'):
+            children.append(child)
+            
+    groups = []
+    current_group = []
+    
+    for child in children:
+        c_text = get_node_text(child).strip()
+        m = re.match(r'^[A-Da-d][\.\:\-\)\s]', c_text)
+        if m and current_group:
+            groups.append(current_group)
+            current_group = [child]
+        else:
+            current_group.append(child)
+            
+    if current_group:
+        groups.append(current_group)
+        
+    if len(groups) <= 1:
+        full_text = get_node_text(p_elem).strip()
+        clean_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', full_text).strip()
+        is_under = False
+        for r in p_elem.iter():
+            if r.tag.endswith('}r'):
+                rPr = r.find(qn('w:rPr'))
+                if rPr is not None:
+                    u = rPr.find(qn('w:u'))
+                    if u is not None and u.get(qn('w:val')) != 'none':
+                        is_under = True
+                        break
+        return [{"elem": p_elem, "text": clean_text, "is_under": is_under}]
+
+    options = []
+    for grp in groups:
+        new_p = copy.deepcopy(p_elem)
+        for child in list(new_p):
+            if not child.tag.endswith('}pPr'):
+                new_p.remove(child)
+        is_under = False
+        grp_text = ""
+        for child in grp:
+            new_p.append(copy.deepcopy(child))
+            grp_text += get_node_text(child)
+            for r in child.iter():
+                if r.tag.endswith('}r'):
+                    rPr = r.find(qn('w:rPr'))
+                    if rPr is not None:
+                        u = rPr.find(qn('w:u'))
+                        if u is not None and u.get(qn('w:val')) != 'none':
+                            is_under = True
+
+        clean_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', grp_text.strip()).strip()
+        options.append({
+            "elem": new_p,
+            "text": clean_text,
+            "is_under": is_under
+        })
+    return options
+
+# 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (BẢO TOÀN FONT TIMES NEW ROMAN 12PT)
 def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     elem_copied = Copy_Element_With_Media(p_elem, doc_src, doc_target, rid_map)
     doc_temp = Document()
@@ -105,7 +173,7 @@ def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     if pPr is not None and pPr.numPr is not None:
         pPr.remove(pPr.numPr)
         
-    full_text = p.text
+    full_text = get_node_text(p._element)
     match = re.match(r'^(Câu|Cau)?\s*\d+[\.\:\-\)\s]*', full_text, re.IGNORECASE)
     if match and match.group(0).strip():
         prefix_len = len(match.group(0))
@@ -138,7 +206,7 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
     if pPr is not None and pPr.numPr is not None:
         pPr.remove(pPr.numPr)
         
-    full_text = p.text
+    full_text = get_node_text(p._element)
     match = re.match(r'^[A-Da-d][\.\:\-\)\s]*', full_text)
     if match:
         prefix_len = len(match.group(0))
@@ -161,12 +229,12 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
     p._element.insert(0, r0._element)
     return p._element
 
-# 4. DÀN HÀNG ĐÁP ÁN PHẦN I BẰNG TAB
+# 5. DÀN HÀNG ĐÁP ÁN PHẦN I BẰNG TAB
 def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
     total_len = sum(len(opt["text"]) for opt in opts)
     max_len = max(len(opt["text"]) for opt in opts) if opts else 0
     
-    if total_len < 45 and max_len < 15:
+    if total_len < 45 and max_len < 15 and len(opts) == 4:
         p_combined = Document().add_paragraph()
         p_format = p_combined.paragraph_format
         p_format.tab_stops.add_tab_stop(Cm(4.3))
@@ -187,7 +255,7 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
                 
         append_elem(doc, p_combined._element)
         
-    elif total_len < 90 and max_len < 30:
+    elif total_len < 90 and max_len < 30 and len(opts) == 4:
         p_line1 = Document().add_paragraph()
         p_line1.paragraph_format.tab_stops.add_tab_stop(Cm(8.7))
         for idx in [0, 1]:
@@ -220,11 +288,11 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
         
     else:
         for idx, opt in enumerate(opts):
-            prefix = f"{nhan_p1[idx]} "
+            prefix = f"{nhan_p1[idx]} " if idx < len(nhan_p1) else ""
             elem = Lay_Noi_Dung_Phuong_An_Clean(opt["elem"], doc_src, doc, rid_map, prefix)
             append_elem(doc, elem)
 
-# 5. ĐỌC VÀ BẢO TOÀN TRỌN VẸN CÔNG THỨC & THÂN CÂU HỎI
+# 6. ĐỌC VÀ BẢO TOÀN TRỌN VẸN CÔNG THỨC & THÂN CÂU HỎI
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1, phan2, phan3 = [], [], []
@@ -240,8 +308,7 @@ def doc_de_goc(file_stream):
         return bool(re.search(r'(?:\[?\s*PHAN[_\s]*[123]\s*\]?|PHẦN\s*(I|II|III|1|2|3)\b)', line, re.IGNORECASE))
 
     for p in doc.paragraphs:
-        full_line = get_full_text(p._element).strip()
-        line = p.text.strip()
+        full_line = get_node_text(p._element).strip()
         has_drawing = ("drawing" in p._element.xml or "graphic" in p._element.xml or "pict" in p._element.xml or "oMath" in p._element.xml)
         
         if not full_line and not has_drawing:
@@ -300,15 +367,15 @@ def doc_de_goc(file_stream):
                 current_item = {"q_elems": [p._element], "options": [], "correct_idx": None}
             elif current_item and not in_solution:
                 if is_opt_line:
-                    clean_opt_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', full_line).strip()
-                    is_under = Kiem_Tra_Gach_Chan(p)
-                    opt_idx = len(current_item["options"])
-                    current_item["options"].append({
-                        "elem": p._element,
-                        "text": clean_opt_text
-                    })
-                    if is_under:
-                        current_item["correct_idx"] = opt_idx
+                    extracted_opts = split_paragraph_options(p._element)
+                    for opt in extracted_opts:
+                        opt_idx = len(current_item["options"])
+                        current_item["options"].append({
+                            "elem": opt["elem"],
+                            "text": opt["text"]
+                        })
+                        if opt["is_under"]:
+                            current_item["correct_idx"] = opt_idx
                 elif len(current_item["options"]) == 0:
                     current_item["q_elems"].append(p._element)
             elif current_item and in_solution:
@@ -357,7 +424,7 @@ def doc_de_goc(file_stream):
 
     return doc, phan1, phan2, phan3
 
-# 6. KHU VỰC THIẾT LẬP THÔNG TIN (UI STREAMLIT)
+# 7. KHU VỰC THIẾT LẬP THÔNG TIN (UI STREAMLIT)
 with st.expander("⚙️ **THÔNG TIN TIÊU ĐỀ ĐỀ KIỂM TRA & CÁC MÃ ĐỀ**", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
@@ -505,7 +572,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                                 correct_label = "A"
                                 for o_idx, opt in enumerate(opts):
                                     if opt["is_correct"]:
-                                        correct_label = nhan_p1_excel[o_idx]
+                                        correct_label = nhan_p1_excel[o_idx] if o_idx < len(nhan_p1_excel) else "A"
                                 
                                 Render_Phuong_An_Phan_1(doc, doc_goc_obj, rid_map, opts, nhan_p1_word)
                                 ma_de_answers[ma_de]['p1'].append(correct_label)
@@ -533,7 +600,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                                 random.shuffle(subs)
                                 ans_chars = []
                                 for s_idx, sub in enumerate(subs):
-                                    prefix = f"{nhan_p2_word[s_idx]} "
+                                    prefix = f"{nhan_p2_word[s_idx]} " if s_idx < len(nhan_p2_word) else ""
                                     elem = Lay_Noi_Dung_Phuong_An_Clean(sub["elem"], doc_goc_obj, doc, rid_map, prefix)
                                     append_elem(doc, elem)
                                     
@@ -639,7 +706,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                     wb_excel.save(excel_io)
                     zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công! Đã bảo toàn 100% công thức toán OMML/MathType, hình ảnh và đồ thị trong toàn bộ mã đề.")
+                st.success("🎉 Trộn đề thành công! Đã tự động tách nhiều đáp án trên 1 dòng, bảo toàn 100% công thức toán OMML/MathType và hình ảnh!")
                 st.download_button(
                     label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
