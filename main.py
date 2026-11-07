@@ -20,7 +20,7 @@ st.set_page_config(page_title="Trộn Đề Kiểm tra môn Vật Lí", page_ico
 
 st.title("📝 Dự án CLB STEM: Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT (Hỗ trợ Câu hỏi chùm linh hoạt & cố định)")
 
 st.divider()
 
@@ -40,8 +40,8 @@ def get_node_text(node):
     return text
 
 def clean_mix_tags_from_elem(p_elem):
-    """Xóa các thẻ [MIX...], [END MIX...], [CHÙM...], [/CHÙM...] khỏi XML đoạn văn"""
-    pattern = re.compile(r'\[\/?\s*(?:END\s+MIX|ENDMIX|MIX|CHÙM|CHUM|CỤM|CUM)(?:[_\s]*\d+)?\s*\]', re.IGNORECASE)
+    """Xóa các thẻ [MIX...], [MIX FIXED...], [END MIX...], [CHÙM...], [/CHÙM...] khỏi XML đoạn văn"""
+    pattern = re.compile(r'\[\/?\s*(?:END\s+MIX\vert{}ENDMIX\vert{}MIX(?:\s*FIXED\vert{}_FIXED)?\vert{}FIXED\s*MIX\vert{}CHÙM(?:\s*FIXED\vert{}_FIXED)?\vert{}CHUM\vert{}CỤM\vert{}CUM)(?:[_\s]*\d+)?\s*\]', re.IGNORECASE)
     for node in p_elem.iter():
         if node.tag.endswith('}t') and node.text:
             if pattern.search(node.text):
@@ -395,7 +395,7 @@ def Render_Cau_Dan_Chum(doc, start_q, end_q):
     r.bold = True
     r.italic = True
 
-# 6. ĐỌC VÀ XÁC ĐỊNH CẤU TRÚC ĐỀ GỐC (HỖ TRỢ THẺ [MIX] VÀ [END MIX])
+# 6. ĐỌC VÀ XÁC ĐỊNH CẤU TRÚC ĐỀ GỐC (HỖ TRỢ CÁC THỂ MIX VÀ MIX FIXED)
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1_blocks, phan2_blocks, phan3_blocks = [], [], []
@@ -412,11 +412,11 @@ def doc_de_goc(file_stream):
     def is_sec_header(line):
         return bool(re.search(r'(?:\[?\s*PHAN[_\s]*[123]\s*\]?|PHẦN\s*(I|II|III|1|2|3)\b)', line, re.IGNORECASE))
 
-    def is_mix_start(line):
-        return bool(re.search(r'\[\s*(?:MIX|CHÙM|CHUM|CỤM|CUM)(?:[_\s]*\d+)?\s*\]', line, re.IGNORECASE)) and not bool(re.search(r'\[\s*END\s+(?:MIX|CHÙM|CHUM|CỤM|CUM)', line, re.IGNORECASE))
-
     def is_mix_end(line):
         return bool(re.search(r'\[\/?\s*(?:END\s+MIX|ENDMIX|\/MIX|\/CHÙM|\/CHUM|\/CỤM|\/CUM)(?:[_\s]*\d+)?\s*\]', line, re.IGNORECASE))
+
+    def is_mix_start(line):
+        return bool(re.search(r'\[\s*(?:MIX|CHÙM|CHUM|CỤM|CUM)', line, re.IGNORECASE)) and not is_mix_end(line)
 
     def flush_item_to_current_block():
         nonlocal current_item, current_cluster, in_cluster, current_section
@@ -468,12 +468,18 @@ def doc_de_goc(file_stream):
             flush_cluster_to_blocks()
             continue
 
-        # Kiểm tra thẻ [MIX]
+        # Kiểm tra thẻ [MIX] hoặc [MIX FIXED]
         if is_mix_start(full_line):
             flush_cluster_to_blocks()
             in_cluster = True
-            current_cluster = {"is_cluster": True, "intro_elems": [], "items": []}
-            clean_text = re.sub(r'\[\/?\s*(?:END\s+MIX|ENDMIX|MIX|CHÙM|CHUM|CỤM|CUM)(?:[_\s]*\d+)?\s*\]', '', full_line, flags=re.IGNORECASE).strip()
+            is_fixed = bool(re.search(r'FIXED', full_line, re.IGNORECASE))
+            current_cluster = {
+                "is_cluster": True,
+                "is_fixed": is_fixed,
+                "intro_elems": [],
+                "items": []
+            }
+            clean_text = re.sub(r'\[\/?\s*(?:END\s+MIX\vert{}ENDMIX\vert{}MIX(?:\s*FIXED\vert{}_FIXED)?\vert{}FIXED\s*MIX\vert{}CHÙM(?:\s*FIXED\vert{}_FIXED)?\vert{}CHUM\vert{}CỤM\vert{}CUM)(?:[_\s]*\d+)?\s*\]', '', full_line, flags=re.IGNORECASE).strip()
             if not clean_text and not has_drawing:
                 continue
 
@@ -686,7 +692,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         nhan_p1_excel = ["A", "B", "C", "D"]
                         nhan_p2_word = ["a)", "b)", "c)", "d)"]
 
-                        # 3. TRỘN PHẦN I (TRỘN KHỐI BẤT KỲ VÀ TỰ ĐỘNG SINH CÂU DẪN)
+                        # 3. TRỘN PHẦN I
                         if phan1_goc:
                             p_head1 = doc.add_paragraph()
                             Set_Paragraph_Justify_And_Zero_Indent(p_head1)
@@ -729,15 +735,14 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                     current_q_idx += 1
                                 else:
                                     c_items = block["items"]
-                                    random.shuffle(c_items)
+                                    if not block.get("is_fixed", False):
+                                        random.shuffle(c_items)
                                     k_count = len(c_items)
                                     start_q = current_q_idx
                                     end_q = current_q_idx + k_count - 1
                                     
-                                    # 1. Thêm câu dẫn vào chùm
                                     Render_Cau_Dan_Chum(doc, start_q, end_q)
                                     
-                                    # 2. Thêm các đoạn ngữ cảnh (văn bản, đồ thị, hình ảnh...)
                                     for intro_elem in block["intro_elems"]:
                                         intro_copied = Copy_Element_With_Media(intro_elem, doc_goc_obj, doc, rid_map)
                                         doc_tmp = Document()
@@ -745,7 +750,6 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                         Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
                                         append_elem(doc, doc_tmp.paragraphs[0]._element)
                                         
-                                    # 3. Thêm từng câu hỏi trong chùm
                                     for q in c_items:
                                         updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {current_q_idx}: ")
                                         append_elem(doc, updated_q0)
@@ -814,7 +818,8 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                     current_q_idx += 1
                                 else:
                                     c_items = block["items"]
-                                    random.shuffle(c_items)
+                                    if not block.get("is_fixed", False):
+                                        random.shuffle(c_items)
                                     k_count = len(c_items)
                                     start_q = current_q_idx
                                     end_q = current_q_idx + k_count - 1
@@ -853,7 +858,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                         ma_de_answers[ma_de]['p2'].append("".join(ans_chars))
                                         current_q_idx += 1
 
-                        # 5. TRỘN PHẦN III (HỖ TRỢ TRỘN CÂU HỎI CHÙM)
+                        # 5. TRỘN PHẦN III
                         if phan3_goc:
                             p_head3 = doc.add_paragraph()
                             Set_Paragraph_Justify_And_Zero_Indent(p_head3)
@@ -884,7 +889,8 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                     current_q_idx += 1
                                 else:
                                     c_items = block["items"]
-                                    random.shuffle(c_items)
+                                    if not block.get("is_fixed", False):
+                                        random.shuffle(c_items)
                                     k_count = len(c_items)
                                     start_q = current_q_idx
                                     end_q = current_q_idx + k_count - 1
@@ -912,7 +918,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                         ma_de_answers[ma_de]['p3'].append(str(q["correct"]).strip())
                                         current_q_idx += 1
 
-                        # 6. LỜI DẶN CHÂN TRANG (CĂN GIỮA & IN ĐẬM ---HẾT---)
+                        # 6. LỜI DẶN CHÂN TRANG
                         p_foot1 = doc.add_paragraph()
                         p_foot1.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         p_foot1.paragraph_format.space_before = Pt(12)
@@ -984,13 +990,3 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
 
                     excel_io = io.BytesIO()
                     wb_excel.save(excel_io)
-                    zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
-
-                st.success("🎉 Trộn đề thành công!")
-                st.download_button(
-                    label="📥 TẢI XUỐNG CÁC MÃ ĐỀ & FILE ĐÁP ÁN (.ZIP)",
-                    data=zip_buffer.getvalue(),
-                    file_name="DE_DA_TRON.zip",
-                    mime="application/zip",
-                    type="primary"
-                )
