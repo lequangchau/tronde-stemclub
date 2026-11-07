@@ -126,7 +126,7 @@ def Has_Auto_Numbering(p):
         return True
     return False
 
-# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN
+# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN (ĐẮM BẢO CHÍNH XÁC KHI CÓ CHỮ A, B, C, D TRONG CÂU)
 def split_paragraph_options(p_elem):
     children = [child for child in p_elem if not child.tag.endswith('}pPr')]
     if not children:
@@ -144,11 +144,33 @@ def split_paragraph_options(p_elem):
             full_str += ch
             char_to_child_idx.append(idx)
 
-    # Quét vị trí của A. B. C. D. trên toàn bộ đoạn văn
-    pattern = re.compile(r'(?:^|[\s\t\xa0]+)([A-Da-d][\.\:\-\)\s\xa0])')
-    matches = list(pattern.finditer(full_str))
+    # Tìm các vị trí thỏa mãn nhãn phương án có dấu phân cách [. : - )]
+    cand_pattern = re.compile(r'(?:^|[\s\t\xa0]+)([A-Da-d][\.\:\-\)])')
+    all_cands = list(cand_pattern.finditer(full_str))
 
-    if len(matches) <= 1:
+    if not all_cands:
+        full_text = full_str.strip()
+        clean_text = re.sub(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]*', '', full_text).strip()
+        return [{"elem": p_elem, "text": clean_text, "is_under": False}]
+
+    # Lọc danh sách khớp để đảm bảo nhãn xuất hiện đúng thứ tự A -> B -> C -> D hoặc a -> b -> c -> d
+    valid_matches = []
+    expected_char_codes = None
+    
+    for m in all_cands:
+        lbl = m.group(1)[0]
+        lbl_code = ord(lbl.upper())
+        
+        if not valid_matches:
+            if m.start(1) <= 5: # Phương án đầu tiên phải nằm ở đầu đoạn văn
+                valid_matches.append(m)
+                expected_char_codes = [lbl_code + 1]
+        else:
+            if lbl_code in expected_char_codes: # Phương án tiếp theo phải đúng thứ tự bảng chữ cái
+                valid_matches.append(m)
+                expected_char_codes = [lbl_code + 1]
+
+    if len(valid_matches) <= 1:
         full_text = full_str.strip()
         clean_text = re.sub(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]*', '', full_text).strip()
         is_under = False
@@ -164,7 +186,7 @@ def split_paragraph_options(p_elem):
 
     groups = []
     start_child_indices = []
-    for m in matches:
+    for m in valid_matches:
         pos = m.start(1)
         c_idx = char_to_child_idx[pos] if pos < len(char_to_child_idx) else len(children) - 1
         if not start_child_indices or start_child_indices[-1] != c_idx:
@@ -401,7 +423,9 @@ def doc_de_goc(file_stream):
 
         is_explicit_q = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', full_line, re.IGNORECASE)) or bool(re.match(r'^\d+[\.\:\-\)]', full_line))
         is_auto_num = Has_Auto_Numbering(p)
-        is_opt_line = bool(re.match(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s]', full_line))
+        
+        # Bắt buộc nhãn phương án phải có dấu phân cách [. : - )] đi kèm
+        is_opt_line = bool(re.match(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)]', full_line))
         
         is_question = False
         if not is_sec_header(full_line) and not is_sol_header(full_line) and not is_opt_line:
@@ -504,7 +528,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
     if uploaded_file is None:
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
-        with st.spinner("Đang khởi tạo mã đề thi và xuất file Excel đáp án dạng ma trận..."):
+        with st.spinner("Đang khởi tạo mã đề thi và xuất file Excel đáp án ma trận..."):
             doc_goc_obj, phan1_goc, phan2_goc, phan3_goc = doc_de_goc(uploaded_file)
             
             danh_sach_ma_de = [m.strip() for m in ds_ma_de_input.split(",") if m.strip()]
@@ -711,7 +735,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         r_f1.font.name = 'Times New Roman'
                         r_f1.font.size = Pt(12)
                         
-                        p_foot2 = doc.add_paragraph("Thí sinh không được sử dụng tài liệu - Giám thị coi thi không giải thích gì thêm")
+                        p_foot2 = doc.add_paragraph("Thí Sinh Không Được Sử Dụng Tài Liệu - Cán Bộ Coi Thi Không Giải Thích Gì Thêm.")
                         p_foot2.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         r_f2 = p_foot2.runs[0]
                         r_f2.font.name = 'Times New Roman'; r_f2.font.size = Pt(10); r_f2.italic = True
@@ -782,7 +806,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
 
                 st.success("🎉 Trộn đề thành công!")
                 st.download_button(
-                    label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
+                    label="📥 TẢI XUẤT TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
                     file_name="DE_DA_TRON.zip",
                     mime="application/zip",
