@@ -408,4 +408,59 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                                 random.shuffle(subs)
                                 for s_idx, sub in enumerate(subs):
                                     # Thẳng lề trái, không dùng tab
-                                    prefix = f"{nhan_p2[s_idx]}
+                                    prefix = f"{nhan_p2[s_idx]} "
+                                    elem = Lay_Noi_Dung_Phuong_An_Clean(copy.deepcopy(sub["elem"]), prefix)
+                                    append_elem(doc, elem)
+                                    
+                                    danh_sach_excel_data.append({
+                                        "Mã Đề": ma_de, "Phần": "Phần II", "Câu Số": f"Câu {idx + 1} ý {nhan_p2[s_idx]}", "Đáp Án Đúng": sub["is_correct"]
+                                    })
+
+                        # --- 4. TRỘN PHẦN III ---
+                        if phan3_goc:
+                            p_head3 = doc.add_paragraph()
+                            p_head3.paragraph_format.space_before = Pt(10)
+                            p_head3.paragraph_format.space_after = Pt(4)
+                            r_h3 = p_head3.add_run(f"PHẦN III. Thí sinh trả lời từ câu 1 đến câu {len(phan3_goc)}.")
+                            r_h3.bold = True
+                            r_h3.font.size = Pt(10.5)
+
+                            p3_shuffled = copy.deepcopy(phan3_goc)
+                            random.shuffle(p3_shuffled)
+                            for idx, q in enumerate(p3_shuffled):
+                                updated_q = Cap_Nhat_Tien_To_Cau(q["q_elem"], f"Câu {idx + 1}: ")
+                                append_elem(doc, updated_q)
+                                
+                                danh_sach_excel_data.append({
+                                    "Mã Đề": ma_de, "Phần": "Phần III", "Câu Số": idx + 1, "Đáp Án Đúng": q["correct"]
+                                })
+
+                        # --- 5. LỜI DẶN CHÂN TRANG ---
+                        p_foot1 = doc.add_paragraph("---Hết---")
+                        p_foot1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        p_foot1.paragraph_format.space_before = Pt(12)
+                        
+                        p_foot2 = doc.add_paragraph("Thí Sinh Không Được Sử Dụng Tài Liệu - Cán Bộ Coi Thi Không Giải Thích Gì Thêm.")
+                        p_foot2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        p_foot2.runs[0].font.size = Pt(9.5)
+                        p_foot2.runs[0].italic = True
+
+                        doc_io = io.BytesIO()
+                        doc.save(doc_io)
+                        zip_file.writestr(f"{ma_de}.docx", doc_io.getvalue())
+                    
+                    # --- XUẤT FILE EXCEL ĐÁP ÁN TỔNG HỢP ---
+                    df = pd.DataFrame(danh_sach_excel_data)
+                    excel_io = io.BytesIO()
+                    with pd.ExcelWriter(excel_io, engine='openpyxl') as writer:
+                        df.to_excel(writer, index=False, sheet_name="Dap_An_Tong_Hop")
+                    zip_file.writestr("Bang_Dap_An_Cac_Ma_De.xlsx", excel_io.getvalue())
+
+                st.success("🎉 Trộn đề hoàn tất! Các mã đề được định dạng khổ A4 chuyên nghiệp chuẩn 100% Bộ GD&ĐT.")
+                st.download_button(
+                    label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
+                    data=zip_buffer.getvalue(),
+                    file_name="Bo_De_Thi_Chuyen_Nghiep.zip",
+                    mime="application/zip",
+                    type="primary"
+                )
