@@ -24,6 +24,124 @@ st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc c�
 
 st.divider()
 
+# HÀM TẠO FILE WORD ĐỀ MẪU TỰ ĐỘNG TRONG BỘ NHỚ
+def tao_file_mau_de_word():
+    """Tạo file Word (.docx) mẫu chuẩn cấu trúc Bộ GD&ĐT trực tiếp trong bộ nhớ để người dùng tải về"""
+    doc = Document()
+    
+    sec = doc.sections[0]
+    sec.page_width = Cm(21.0)
+    sec.page_height = Cm(29.7)
+    sec.top_margin = Cm(1.5)
+    sec.bottom_margin = Cm(1.5)
+    sec.left_margin = Cm(2.0)
+    sec.right_margin = Cm(1.5)
+    
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_title = p_title.add_run("ĐỀ THI MẪU CHUẨN CẤU TRÚC BỘ GD&ĐT")
+    r_title.bold = True
+    r_title.font.name = 'Times New Roman'
+    r_title.font.size = Pt(14)
+    
+    p_sub = doc.add_paragraph()
+    p_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_sub = p_sub.add_run("(File mẫu hướng dẫn định dạng đề gốc - CLB STEM THPT Thủ Đức)")
+    r_sub.italic = True
+    r_sub.font.name = 'Times New Roman'
+    r_sub.font.size = Pt(11)
+    
+    p_note = doc.add_paragraph()
+    r_n0 = p_note.add_run("📌 HƯỚNG DẪN SOẠN ĐỀ GỐC:\n")
+    r_n0.bold = True
+    p_note.add_run("1. Đáp án đúng: Gạch chân chữ cái đầu (ví dụ: ")
+    r_u1 = p_note.add_run("A.")
+    r_u1.underline = True
+    p_note.add_run(" hoặc ")
+    r_u2 = p_note.add_run("a)")
+    r_u2.underline = True
+    p_note.add_run(") hoặc ghi 'Đáp án: A' / 'Đáp số: 10' ở phần Lời giải.\n")
+    p_note.add_run("2. Thẻ [MIX]: Đảo ngẫu nhiên khối chùm và đảo vị trí các câu trong khối.\n")
+    p_note.add_run("3. Thẻ [MIX FIXED]: Đảo ngẫu nhiên vị trí khối chùm nhưng giữ nguyên 100% thứ tự các câu trong khối.\n")
+    p_note.add_run("4. Thẻ [END MIX]: Kết thúc nhóm câu hỏi chùm.\n\n")
+    for r in p_note.runs:
+        r.font.name = 'Times New Roman'
+        r.font.size = Pt(11)
+        
+    p_h1 = doc.add_paragraph()
+    r1 = p_h1.add_run("PHẦN I. Thí sinh trả lời từ câu 1 đến câu 3. Mỗi câu hỏi thí sinh chỉ chọn một phương án.")
+    r1.bold = True
+    r1.font.name = 'Times New Roman'
+    r1.font.size = Pt(12)
+    
+    doc.add_paragraph("Câu 1: Đơn vị nào sau đây là đơn vị của tần số?")
+    p_o1 = doc.add_paragraph()
+    r_a1 = p_o1.add_run("A. Hz.")
+    r_a1.underline = True
+    p_o1.add_run("\tB. s.\tC. m/s.\tD. N.")
+    
+    doc.add_paragraph("[MIX FIXED]")
+    doc.add_paragraph("Một vật dao động điều hòa có phương trình x = 5cos(2πt) (cm).")
+    doc.add_paragraph("Câu 2: Biên độ dao động của vật là")
+    p_o2 = doc.add_paragraph()
+    r_a2 = p_o2.add_run("A. 5 cm.")
+    r_a2.underline = True
+    p_o2.add_run("\tB. 10 cm.\tC. 2π cm.\tD. 2 cm.")
+    
+    doc.add_paragraph("Câu 3: Tần số góc của dao động là")
+    p_o3 = doc.add_paragraph()
+    p_o3.add_run("A. 2 Hz.\tB. 5 rad/s.\t")
+    r_a3 = p_o3.add_run("C. 2π rad/s.")
+    r_a3.underline = True
+    p_o3.add_run("\tD. π rad/s.")
+    doc.add_paragraph("[END MIX]")
+    
+    p_h2 = doc.add_paragraph()
+    r2 = p_h2.add_run("PHẦN II. Thí sinh trả lời câu 1. Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn đúng hoặc sai.")
+    r2.bold = True
+    r2.font.name = 'Times New Roman'
+    r2.font.size = Pt(12)
+    
+    doc.add_paragraph("Câu 1: Xét một sóng cơ truyền dọc theo trục Ox.")
+    p_s1 = doc.add_paragraph()
+    r_sa = p_s1.add_run("a) Sóng cơ không truyền được trong chân không.")
+    r_sa.underline = True
+    doc.add_paragraph("b) Sóng dọc là sóng có phương dao động vuông góc với phương truyền sóng.")
+    p_s3 = doc.add_paragraph()
+    r_sc = p_s3.add_run("c) Vận tốc truyền sóng phụ thuộc vào bản chất môi trường.")
+    r_sc.underline = True
+    doc.add_paragraph("d) Chu kỳ của sóng thay đổi khi truyền từ không khí vào nước.")
+    
+    p_h3 = doc.add_paragraph()
+    r3 = p_h3.add_run("PHẦN III. Thí sinh trả lời câu 1.")
+    r3.bold = True
+    r3.font.name = 'Times New Roman'
+    r3.font.size = Pt(12)
+    
+    doc.add_paragraph("Câu 1: Một con lắc đơn có chiều dài l = 1 m dao động tại nơi có g = 9,8 m/s². Chu kỳ dao động của con lắc bằng bao nhiêu giây? (Làm tròn đến 1 chữ số thập phân)")
+    doc.add_paragraph("Đáp số: 2,0")
+    
+    bio = io.BytesIO()
+    doc.save(bio)
+    return bio.getvalue()
+
+# KHỐI GIAO DIỆN TẢI FILE MẪU TRÊN WEB
+with st.container():
+    col_mau1, col_mau2 = st.columns([3, 1])
+    with col_mau1:
+        st.markdown("📄 **Chưa có file đề chuẩn định dạng?** Tải ngay file Word mẫu để tham khảo cách soạn đề:")
+    with col_mau2:
+        file_mau_bytes = tao_file_mau_de_word()
+        st.download_button(
+            label="📥 Tải File Mẫu (.docx)",
+            data=file_mau_bytes,
+            file_name="MAU_SOAN_DE_KIEM_TRA.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True
+        )
+
+st.divider()
+
 # 2. TRÍCH XUẤT VĂN BẢN VÀ XỬ LÝ XML CÔNG THỨC & HÌNH ẢNH
 def get_node_text(node):
     """Trích xuất toàn bộ chữ trong đoạn văn XML (bao gồm chữ thường <w:t>, công thức toán <m:t> và tab <w:tab/>)"""
