@@ -55,7 +55,7 @@ def load_file_mau_bytes():
 with st.container():
     col_mau1, col_mau2 = st.columns([3, 1])
     with col_mau1:
-        st.markdown(f"📄 **File đề mẫu chính thức:** Tải đề mẫu **`{FILE_MAU_TEN}`** để tham khảo chuẩn định dạng & các thẻ `[MIX]`:")
+        st.markdown(f"📄 **File đề mẫu:** Tải file **`{FILE_MAU_TEN}`**")
     with col_mau2:
         file_mau_data = load_file_mau_bytes()
         if file_mau_data:
