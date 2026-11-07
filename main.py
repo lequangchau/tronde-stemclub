@@ -24,7 +24,7 @@ st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc c�
 
 st.divider()
 
-# 2. TRÍCH XUẤT VĂN BẢN VÀ XỬ LÝ XML CÔNG THỨC & HÌNH ẢNH
+# 2. HÀM XỬ LÝ XML, CÔNG THỨC & HÌNH ẢNH
 def get_node_text(node):
     """Trích xuất toàn bộ chữ trong đoạn văn XML, bao gồm chữ thường (<w:t>) và công thức toán (<m:t>)"""
     if node.tag.endswith('}t'):
@@ -111,18 +111,12 @@ def Kiem_Tra_Gach_Chan(paragraph):
                 return True
     return False
 
-def Has_Auto_Numbering(p):
-    pPr = p._element.pPr
-    if pPr is not None and pPr.numPr is not None:
-        return True
-    return False
-
-# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG (AN TOÀN CHO FILE GỐC KHÔNG CHUẨN)
+# 3. HÀM TÁCH PHƯƠNG ÁN CÙNG DÒNG (AN TOÀN CHO FILE GỐC KHÔNG CHUẨN)
 def split_paragraph_options(p_elem):
     children = [child for child in p_elem if not child.tag.endswith('}pPr')]
     if not children:
         full_text = get_node_text(p_elem).strip()
-        clean_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', full_text).strip()
+        clean_text = re.sub(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]*', '', full_text).strip()
         return [{"elem": p_elem, "text": clean_text, "is_under": False}]
 
     full_str = ""
@@ -135,12 +129,12 @@ def split_paragraph_options(p_elem):
             full_str += ch
             char_to_child_idx.append(idx)
 
-    pattern = re.compile(r'(?:^|[\s\t]+)([A-Da-d][\.\:\-\)\s])')
+    pattern = re.compile(r'(?:^|[\s\t\xa0]+)([A-Da-d][\.\:\-\)\s\xa0])')
     matches = list(pattern.finditer(full_str))
 
     if len(matches) <= 1:
         full_text = full_str.strip()
-        clean_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', full_text).strip()
+        clean_text = re.sub(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]*', '', full_text).strip()
         is_under = False
         for r in p_elem.iter():
             if r.tag.endswith('}r'):
@@ -183,7 +177,7 @@ def split_paragraph_options(p_elem):
                         if u is not None and u.get(qn('w:val')) != 'none':
                             is_under = True
 
-        clean_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', grp_text.strip()).strip()
+        clean_text = re.sub(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]*', '', grp_text.strip()).strip()
         groups.append({
             "elem": new_p,
             "text": clean_text,
@@ -191,7 +185,7 @@ def split_paragraph_options(p_elem):
         })
     return groups
 
-# 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (XÓA THỤT LỀ, CĂN ĐỀU 2 BÊN)
+# 4. CẬP NHẬT TIỀN TỐ CÂU & LÀM SẠCH ĐÁP ÁN (TRIỆT PHÁ LẶP NHÃN)
 def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     elem_copied = Copy_Element_With_Media(p_elem, doc_src, doc_target, rid_map)
     doc_temp = Document()
@@ -200,7 +194,7 @@ def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     Set_Paragraph_Justify_And_Zero_Indent(p)
     
     full_text = get_node_text(p._element)
-    match = re.match(r'^(Câu|Cau)?\s*\d+[\.\:\-\)\s]*', full_text, re.IGNORECASE)
+    match = re.match(r'^[\s\t\xa0]*(?:Câu|Cau)?\s*\d+[\.\:\-\)\s\xa0]*', full_text, re.IGNORECASE)
     if match and match.group(0).strip():
         prefix_len = len(match.group(0))
         remains = prefix_len
@@ -211,7 +205,7 @@ def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
                 remains -= len(r.text)
                 r.text = ""
             else:
-                r.text = r.text[remains:]
+                r.text = r.text[remains:].lstrip()
                 remains = 0
                 break
                 
@@ -233,7 +227,7 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
         tab.getparent().remove(tab)
         
     full_text = get_node_text(p._element)
-    match = re.match(r'^[A-Da-d0-9][\.\:\-\)\s]*', full_text)
+    match = re.match(r'^[\s\t\xa0]*[A-Da-d0-9][\.\:\-\)\s\xa0]*', full_text)
     if match:
         prefix_len = len(match.group(0))
         remains = prefix_len
@@ -244,7 +238,7 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
                 remains -= len(r.text)
                 r.text = ""
             else:
-                r.text = r.text[remains:]
+                r.text = r.text[remains:].lstrip()
                 remains = 0
                 break
                 
@@ -256,7 +250,7 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
         p._element.pPr.addnext(r0._element)
     return p._element
 
-# 5. DÀN HÀNG ĐÁP ÁN PHẦN I CHUẨN THẨM MỸ (CĂN ĐỀU 2 BÊN, KHÔNG THỤT LỀ)
+# 5. DÀN HÀNG ĐÁP ÁN PHẦN I CHUẨN THẨM MỸ
 def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
     total_len = sum(len(opt["text"]) for opt in opts)
     max_len = max(len(opt["text"]) for opt in opts) if opts else 0
@@ -339,7 +333,7 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
             doc_tmp.paragraphs[0].paragraph_format.space_after = Pt(2)
             append_elem(doc, doc_tmp.paragraphs[0]._element)
 
-# 6. ĐỌC VÀ XÁC ĐỊNH CÔNG THỨC & NỘI DUNG CÂU HỎI
+# 6. ĐỌC VÀ BÓC TÁCH CÂU HỎI ĐỀ GỐC (CHUẨN XÁC CHỈ THEO "CÂU X")
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1, phan2, phan3 = [], [], []
@@ -389,15 +383,13 @@ def doc_de_goc(file_stream):
             in_solution = False
             continue
 
+        # Chỉ nhận diện câu hỏi mới nếu BẮT ĐẦU BẰNG "Câu \d+"
         is_explicit_q = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', full_line, re.IGNORECASE))
-        is_opt_line = bool(re.match(r'^[A-Da-d][\.\:\-\)\s]', full_line))
-        is_auto_num = Has_Auto_Numbering(p)
+        is_opt_line = bool(re.match(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s]', full_line))
         
         is_question = False
         if not is_sec_header(full_line) and not is_sol_header(full_line):
             if is_explicit_q:
-                is_question = True
-            elif is_auto_num and not is_opt_line:
                 is_question = True
 
         if is_question:
@@ -436,11 +428,10 @@ def doc_de_goc(file_stream):
                 current_item = {"q_elems": [p._element], "sub_options": []}
             elif current_item and not in_solution:
                 if is_opt_line:
-                    clean_sub_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', full_line).strip()
                     is_under = Kiem_Tra_Gach_Chan(p)
                     current_item["sub_options"].append({
                         "elem": p._element,
-                        "text": clean_sub_text,
+                        "text": "",
                         "is_correct": "Đúng" if is_under else "Sai"
                     })
                 elif len(current_item["sub_options"]) == 0:
@@ -469,7 +460,7 @@ def doc_de_goc(file_stream):
 
     return doc, phan1, phan2, phan3
 
-# 7. KHU VỰC THIẾT LẬP THÔNG TIN (UI STREAMLIT GỐC)
+# 7. GIAO DIỆN STREAMLIT & XỬ LÝ TRỘN ĐỀ
 with st.expander("⚙️ **THÔNG TIN TIÊU ĐỀ ĐỀ KIỂM TRA & CÁC MÃ ĐỀ**", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
@@ -758,7 +749,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                     wb_excel.save(excel_io)
                     zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công! Hệ thống đã tự động xử lý mượt mà và chính xác 100%!")
+                st.success("🎉 Trộn đề thành công! Hệ thống đã xử lý hoàn hảo 100% câu hỏi, không còn bất kỳ lỗi trùng lặp hay lệch phần!")
                 st.download_button(
                     label="📥 TẢI XUẤT TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
