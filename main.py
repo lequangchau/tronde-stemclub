@@ -20,7 +20,7 @@ st.set_page_config(page_title="Trộn Đề Kiểm tra môn Vật Lí", page_ico
 
 st.title("📝 Dự án CLB STEM: Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT (Hỗ trợ Câu hỏi chùm linh hoạt & cố định)")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT (Hỗ trợ Câu hỏi chùm")
 
 st.divider()
 
