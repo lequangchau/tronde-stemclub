@@ -11,6 +11,8 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml import parse_xml
 from docx.oxml.ns import qn
+import openpyxl
+from openpyxl.styles import Alignment, Font
 import pandas as pd
 
 # 1. CẤU HÌNH TRANG WEB STREAMLIT
@@ -18,7 +20,7 @@ st.set_page_config(page_title="Phần mềm Trộn Đề Vật Lí Chuyên Nghi�
 
 st.title("📝 Ứng Dụng Trộn Đề Vật Lí Online")
 st.caption("👨‍🏫 **Tác giả:** LQChau - CLB STEM - THPT Thủ Đức")
-st.write("Hệ thống trộn đề thi chuẩn cấu trúc Bộ GD&ĐT, khóa cứng Font Times New Roman 12pt, bảo toàn công thức MathType & Hình ảnh.")
+st.write("Hệ thống trộn đề thi chuẩn cấu trúc Bộ GD&ĐT, bảo toàn công thức MathType, Equation, Hình ảnh & xuất file Excel đáp án ma trận chuẩn mực.")
 
 st.divider()
 
@@ -29,7 +31,6 @@ def Thiet_Lap_Font_Times_New_Roman(doc):
     font.name = 'Times New Roman'
     font.size = Pt(12)
     
-    # Ép trực tiếp cấu hình XML để MS Word không bao giờ đổi sang Cambria/Calibri
     rPr = style._element.get_or_add_rPr()
     rFonts = parse_xml(r'<w:rFonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman" w:eastAsia="Times New Roman"/>')
     rPr.append(rFonts)
@@ -111,7 +112,6 @@ def Render_Phuong_An_Phan_1(doc, opts, nhan_p1):
     total_len = sum(len(opt["text"]) for opt in opts)
     max_len = max(len(opt["text"]) for opt in opts) if opts else 0
     
-    # 4 phương án / 1 dòng
     if total_len < 45 and max_len < 15:
         p_combined = Document().add_paragraph()
         p_format = p_combined.paragraph_format
@@ -133,7 +133,6 @@ def Render_Phuong_An_Phan_1(doc, opts, nhan_p1):
                 
         append_elem(doc, p_combined._element)
         
-    # 2 phương án / 1 dòng
     elif total_len < 90 and max_len < 30:
         p_line1 = Document().add_paragraph()
         p_line1.paragraph_format.tab_stops.add_tab_stop(Cm(8.7))
@@ -165,7 +164,6 @@ def Render_Phuong_An_Phan_1(doc, opts, nhan_p1):
                 r_t.font.size = Pt(12)
         append_elem(doc, p_line2._element)
         
-    # Mỗi phương án 1 dòng
     else:
         for idx, opt in enumerate(opts):
             prefix = f"{nhan_p1[idx]} "
@@ -271,7 +269,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
     if uploaded_file is None:
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
-        with st.spinner("Đang khởi tạo mã đề thi chuẩn Times New Roman 12pt..."):
+        with st.spinner("Đang khởi tạo mã đề thi và tạo file Excel đáp án ma trận..."):
             phan1_goc, phan2_goc, phan3_goc = doc_de_goc(uploaded_file)
             
             danh_sach_ma_de = [m.strip() for m in ds_ma_de_input.split(",") if m.strip()]
@@ -285,14 +283,15 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                 st.info(f"📊 Đã phân tích: **{len(phan1_goc)}** câu Phần I | **{len(phan2_goc)}** câu Phần II | **{len(phan3_goc)}** câu Phần III")
                 
                 zip_buffer = io.BytesIO()
-                danh_sach_excel_data = []
+                ma_de_answers = {}
 
                 with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED) as zip_file:
                     for ma_de in danh_sach_ma_de:
                         doc = Document()
                         Thiet_Lap_Font_Times_New_Roman(doc)
+                        ma_de_answers[ma_de] = {'p1': [], 'p2': [], 'p3': []}
                         
-                        # --- CẤU HÌNH TRANG A4 VÀ LỀ TRANG CHUẨN ---
+                        # CẤU HÌNH TRANG A4 VÀ LỀ TRANG
                         sec = doc.sections[0]
                         sec.page_width = Cm(21.0)
                         sec.page_height = Cm(29.7)
@@ -301,7 +300,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         sec.left_margin = Cm(2.0)
                         sec.right_margin = Cm(1.5)
                         
-                        # --- 1. TIÊU ĐỀ HEADERS (2 CỘT CHUẨN BỘ) ---
+                        # 1. TIÊU ĐỀ HEADERS
                         table = doc.add_table(rows=1, cols=2)
                         table.alignment = WD_TABLE_ALIGNMENT.CENTER
                         table.autofit = False
@@ -310,7 +309,6 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         cell_left.width = Cm(8.5)
                         cell_right.width = Cm(9.0)
                         
-                        # Cột trái (Sở & Trường)
                         p_l = cell_left.paragraphs[0]
                         p_l.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         r_so = p_l.add_run(f"{so_gd.upper()}\n")
@@ -320,14 +318,12 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         r_truong.bold = True
                         r_truong.font.name = 'Times New Roman'; r_truong.font.size = Pt(11)
                         
-                        # Đếm số câu động
                         sec_notes = []
                         if len(phan1_goc) > 0: sec_notes.append(f"{len(phan1_goc)} TN")
                         if len(phan2_goc) > 0: sec_notes.append(f"{len(phan2_goc)} ĐS")
                         if len(phan3_goc) > 0: sec_notes.append(f"{len(phan3_goc)} TL Ngắn")
                         note_str = f"({', '.join(sec_notes)})" if sec_notes else ""
                         
-                        # Cột phải (Kỳ thi, môn, thời gian, số câu)
                         p_r = cell_right.paragraphs[0]
                         p_r.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         r_kt = p_r.add_run(f"{ten_ky_thi.upper()}\n")
@@ -344,7 +340,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         r_note = p_r.add_run(f"Đề có {note_str}")
                         r_note.font.name = 'Times New Roman'; r_note.font.size = Pt(9.5); r_note.italic = True
                         
-                        # --- 2. ĐỊNH DẠNG HỌ TÊN, SỐ BÁO DẠNH, MÃ ĐỀ (3 DÒNG TRỰC TIẾP) ---
+                        # 2. ĐỊNH DẠNG HỌ TÊN, SỐ BÁO BÁO DẠNH, MÃ ĐỀ (3 DÒNG TÁCH BIỆT)
                         p_name = doc.add_paragraph()
                         p_name.paragraph_format.space_before = Pt(8)
                         p_name.paragraph_format.space_after = Pt(2)
@@ -367,10 +363,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         r_m2.bold = True
                         r_m2.font.name = 'Times New Roman'; r_m2.font.size = Pt(12)
 
-                        nhan_p1 = ["A.", "B.", "C.", "D."]
-                        nhan_p2 = ["a)", "b)", "c)", "d)"]
+                        nhan_p1_word = ["A.", "B.", "C.", "D."]
+                        nhan_p1_excel = ["A", "B", "C", "D"]
+                        nhan_p2_word = ["a)", "b)", "c)", "d)"]
 
-                        # --- 3. TRỘN PHẦN I ---
+                        # 3. TRỘN PHẦN I
                         if phan1_goc:
                             p_head1 = doc.add_paragraph()
                             p_head1.paragraph_format.space_before = Pt(6)
@@ -391,18 +388,15 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                                     opt["is_correct"] = (o_i == correct_idx)
                                 
                                 random.shuffle(opts)
-                                correct_label = "Chưa chọn đáp án ở đề gốc"
+                                correct_label = "A"
                                 for o_idx, opt in enumerate(opts):
                                     if opt["is_correct"]:
-                                        correct_label = nhan_p1[o_idx]
+                                        correct_label = nhan_p1_excel[o_idx]
                                 
-                                Render_Phuong_An_Phan_1(doc, opts, nhan_p1)
-                                
-                                danh_sach_excel_data.append({
-                                    "Mã Đề": ma_de, "Phần": "Phần I", "Câu Số": idx + 1, "Đáp Án Đúng": correct_label
-                                })
+                                Render_Phuong_An_Phan_1(doc, opts, nhan_p1_word)
+                                ma_de_answers[ma_de]['p1'].append(correct_label)
 
-                        # --- 4. TRỘN PHẦN II ---
+                        # 4. TRỘN PHẦN II
                         if phan2_goc:
                             p_head2 = doc.add_paragraph()
                             p_head2.paragraph_format.space_before = Pt(10)
@@ -419,16 +413,18 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                                 
                                 subs = q["sub_options"]
                                 random.shuffle(subs)
+                                ans_chars = []
                                 for s_idx, sub in enumerate(subs):
-                                    prefix = f"{nhan_p2[s_idx]} "
+                                    prefix = f"{nhan_p2_word[s_idx]} "
                                     elem = Lay_Noi_Dung_Phuong_An_Clean(copy.deepcopy(sub["elem"]), prefix)
                                     append_elem(doc, elem)
                                     
-                                    danh_sach_excel_data.append({
-                                        "Mã Đề": ma_de, "Phần": "Phần II", "Câu Số": f"Câu {idx + 1} ý {nhan_p2[s_idx]}", "Đáp Án Đúng": sub["is_correct"]
-                                    })
+                                    char = "Đ" if sub["is_correct"] == "Đúng" else "S"
+                                    ans_chars.append(char)
+                                    
+                                ma_de_answers[ma_de]['p2'].append("".join(ans_chars))
 
-                        # --- 5. TRỘN PHẦN III ---
+                        # 5. TRỘN PHẦN III
                         if phan3_goc:
                             p_head3 = doc.add_paragraph()
                             p_head3.paragraph_format.space_before = Pt(10)
@@ -442,12 +438,9 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                             for idx, q in enumerate(p3_shuffled):
                                 updated_q = Cap_Nhat_Tien_To_Cau(q["q_elem"], f"Câu {idx + 1}: ")
                                 append_elem(doc, updated_q)
-                                
-                                danh_sach_excel_data.append({
-                                    "Mã Đề": ma_de, "Phần": "Phần III", "Câu Số": idx + 1, "Đáp Án Đúng": q["correct"]
-                                })
+                                ma_de_answers[ma_de]['p3'].append(str(q["correct"]).strip())
 
-                        # --- 6. LỜI DẶN CHÂN TRANG ---
+                        # 6. LỜI DẶN CHÂN TRANG
                         p_foot1 = doc.add_paragraph("---Hết---")
                         p_foot1.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         p_foot1.paragraph_format.space_before = Pt(12)
@@ -463,16 +456,60 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         doc.save(doc_io)
                         zip_file.writestr(f"{ma_de}.docx", doc_io.getvalue())
                     
-                    # --- XUẤT FILE EXCEL ĐÁP ÁN TỔNG HỢP ---
-                    df = pd.DataFrame(danh_sach_excel_data)
+                    # --- XUẤT FILE EXCEL ĐÁP ÁN THEO ĐÚNG MẪU BẢNG MA TRẬN ---
+                    wb_excel = openpyxl.Workbook()
+                    ws_excel = wb_excel.active
+                    ws_excel.title = "Sheet1"
+
+                    header = ['Câu'] + [str(m) for m in danh_sach_ma_de]
+                    ws_excel.append(header)
+
+                    first_md = danh_sach_ma_de[0]
+                    num_p1 = len(ma_de_answers[first_md]['p1'])
+                    num_p2 = len(ma_de_answers[first_md]['p2'])
+                    num_p3 = len(ma_de_answers[first_md]['p3'])
+
+                    # Hàng Phần I (1 đến N câu)
+                    for i in range(num_p1):
+                        row = [i + 1]
+                        for md in danh_sach_ma_de:
+                            row.append(ma_de_answers[md]['p1'][i])
+                        ws_excel.append(row)
+
+                    # Hàng Phần II (Gộp 4 ý thành 1 ô chuỗi 4 ký tự: ĐSĐS...)
+                    for i in range(num_p2):
+                        row = [i + 1]
+                        for md in danh_sach_ma_de:
+                            row.append(ma_de_answers[md]['p2'][i])
+                        ws_excel.append(row)
+
+                    # Hàng Phần III (Định dạng General/Chuỗi)
+                    for i in range(num_p3):
+                        row = [i + 1]
+                        for md in danh_sach_ma_de:
+                            row.append(str(ma_de_answers[md]['p3'][i]))
+                        ws_excel.append(row)
+
+                    align_center = Alignment(horizontal='center', vertical='center')
+                    font_header = Font(name='Calibri', size=11, bold=True)
+                    font_cell = Font(name='Calibri', size=11)
+
+                    for row in ws_excel.iter_rows(min_row=1, max_row=ws_excel.max_row, min_col=1, max_col=ws_excel.max_column):
+                        for cell in row:
+                            cell.alignment = align_center
+                            cell.number_format = 'General'
+                            if cell.row == 1:
+                                cell.font = font_header
+                            else:
+                                cell.font = font_cell
+
                     excel_io = io.BytesIO()
-                    with pd.ExcelWriter(excel_io, engine='openpyxl') as writer:
-                        df.to_excel(writer, index=False, sheet_name="Dap_An_Tong_Hop")
+                    wb_excel.save(excel_io)
                     zip_file.writestr("Bang_Dap_An_Cac_Ma_De.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công! Toàn bộ các file mã đề đã được chuẩn hóa Times New Roman 12pt và định dạng 3 dòng thông tin thí sinh.")
+                st.success("🎉 Trộn đề thành công! Đã tạo file Excel đáp án ma trận chuẩn 100% mẫu quy định.")
                 st.download_button(
-                    label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
+                    label="📥 TẢI XUẤN TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
                     file_name="Bo_De_Thi_Chuyen_Nghiep.zip",
                     mime="application/zip",
