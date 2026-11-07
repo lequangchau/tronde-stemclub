@@ -170,7 +170,7 @@ def Render_Phuong_An_Phan_1(doc, opts, nhan_p1):
             elem = Lay_Noi_Dung_Phuong_An_Clean(copy.deepcopy(opt["elem"]), prefix)
             append_elem(doc, elem)
 
-# 5. HÀM ĐỌC ĐỀ GỐC
+# 5. HÀM ĐỌC ĐỀ GỐC CẢI TIẾN BỘ LỌC ĐÁP ÁN PHẦN III
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1, phan2, phan3 = [], [], []
@@ -238,8 +238,11 @@ def doc_de_goc(file_stream):
             if is_question:
                 if current_item: phan3.append(current_item)
                 current_item = {"q_elem": p._element, "correct": ""}
-            elif re.search(r'Đáp\s*số\s*[\:\-\.]', line, re.IGNORECASE) and current_item:
-                current_item["correct"] = re.sub(r'^Đáp\s*số\s*[\:\-\.]\s*', '', line, flags=re.IGNORECASE).strip()
+            elif current_item:
+                if re.search(r'(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA|Đáp)\b', line, re.IGNORECASE):
+                    current_item["correct"] = re.sub(r'^.*?(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA|Đáp)\s*[\:\-\.]*\s*', '', line, flags=re.IGNORECASE).strip()
+                elif not line.lower().startswith("lời giải") and not current_item["correct"]:
+                    current_item["correct"] = line.strip()
 
     if current_item:
         if current_section == 1: phan1.append(current_item)
@@ -340,7 +343,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         r_note = p_r.add_run(f"Đề có {note_str}")
                         r_note.font.name = 'Times New Roman'; r_note.font.size = Pt(9.5); r_note.italic = True
                         
-                        # 2. ĐỊNH DẠNG HỌ TÊN, SỐ BÁO DẠNH, MÃ ĐỀ (3 DÒNG TÁCH BIỆT)
+                        # 2. ĐỊNH DẠNG HỌ TÊN, SỐ BÁO BÁO DẠNH, MÃ ĐỀ (3 DÒNG TÁCH BIỆT)
                         p_name = doc.add_paragraph()
                         p_name.paragraph_format.space_before = Pt(8)
                         p_name.paragraph_format.space_after = Pt(2)
