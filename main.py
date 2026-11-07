@@ -26,13 +26,17 @@ st.divider()
 
 # 2. TRÍCH XUẤT VĂN BẢN VÀ XỬ LÝ XML CÔNG THỨC & HÌNH ẢNH
 def get_node_text(node):
-    """Trích xuất toàn bộ chữ trong đoạn văn XML, bao gồm chữ thường (<w:t>) và công thức toán (<m:t>)"""
+    """Trích xuất toàn bộ chữ trong đoạn văn XML (bao gồm chữ thường <w:t>, công thức toán <m:t> và tab <w:tab/>)"""
     if node.tag.endswith('}t'):
         return node.text or ""
+    elif node.tag.endswith('}tab'):
+        return "\t"
     text = ""
     for child in node.iter():
         if child.tag.endswith('}t'):
             text += child.text or ""
+        elif child.tag.endswith('}tab'):
+            text += "\t"
     return text
 
 def Thiet_Lap_Font_Times_New_Roman(doc):
@@ -122,7 +126,7 @@ def Has_Auto_Numbering(p):
         return True
     return False
 
-# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN (THUẬT TOÁN ÁNH XẠ CHUỖI NÂNG CẤP)
+# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN
 def split_paragraph_options(p_elem):
     children = [child for child in p_elem if not child.tag.endswith('}pPr')]
     if not children:
@@ -395,7 +399,6 @@ def doc_de_goc(file_stream):
             in_solution = False
             continue
 
-        # Nhận diện chính xác Câu X với mọi dấu phân cách (., :, -, )) và loại trừ thông số số liệu đầu dòng
         is_explicit_q = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', full_line, re.IGNORECASE)) or bool(re.match(r'^\d+[\.\:\-\)]', full_line))
         is_auto_num = Has_Auto_Numbering(p)
         is_opt_line = bool(re.match(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s]', full_line))
@@ -779,7 +782,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
 
                 st.success("🎉 Trộn đề thành công!")
                 st.download_button(
-                    label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
+                    label="📥 TẢI XUẤT TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
                     file_name="DE_DA_TRON.zip",
                     mime="application/zip",
