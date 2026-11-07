@@ -16,11 +16,11 @@ from openpyxl.styles import Alignment, Font
 import pandas as pd
 
 # 1. CẤU HÌNH TRANG WEB STREAMLIT
-st.set_page_config(page_title="Phần mềm Trộn Đề Kiểm tra môn Vật Lí", page_icon="📝", layout="centered")
+st.set_page_config(page_title="Phần mềm Trộn Đề Vật Lí Chuyên Nghiệp", page_icon="📝", layout="centered")
 
 st.title("📝 Ứng Dụng Trộn Đề Vật Lí Online")
 st.caption("👨‍🏫 **Tác giả:** LQChau - CLB STEM - THPT Thủ Đức")
-st.write("Hệ thống trộn đề thi chuẩn cấu trúc Bộ GD&ĐT, bảo toàn công thức MathType, Equation, Hình ảnh & xuất file Excel đáp án ma trận chuẩn mực.")
+st.write("Hệ thống trộn đề thi chuẩn cấu trúc Bộ GD&ĐT, bảo toàn công thức MathType, Equation, Hình ảnh & xuất file Excel đáp án ma trận chuẩn mẫu 100%.")
 
 st.divider()
 
@@ -258,7 +258,7 @@ with st.expander("⚙️ **CẤU HÌNH THÔNG TIN TIÊU ĐỀ ĐỀ THI & MÃ Đ
     with col2:
         mon_thi = st.text_input("Môn thi / Khối", value="MÔN VẬT LÍ - KHỐI 10")
         thoi_gian = st.text_input("Thời gian làm bài", value="45 phút")
-        ds_ma_de_input = st.text_input("Danh sách Mã Đề (cách nhau bởi dấu phẩy)", value="2101, 2102, 2103, 2104")
+        ds_ma_de_input = st.text_input("Danh sách Mã Đề (cách nhau bởi dấu phẩy)", value="1021, 1022, 1023, 1024")
 
 uploaded_file = st.file_uploader("Bước 1: Tải lên file Word đề gốc (.docx)", type=["docx"])
 
@@ -269,12 +269,12 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
     if uploaded_file is None:
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
-        with st.spinner("Đang khởi tạo mã đề thi và tạo file Excel đáp án ma trận..."):
+        with st.spinner("Đang khởi tạo mã đề thi và xuất file Excel đáp án ma trận..."):
             phan1_goc, phan2_goc, phan3_goc = doc_de_goc(uploaded_file)
             
             danh_sach_ma_de = [m.strip() for m in ds_ma_de_input.split(",") if m.strip()]
             if not danh_sach_ma_de:
-                danh_sach_ma_de = ["2101", "2102", "2103", "2104"]
+                danh_sach_ma_de = ["1021", "1022", "1023", "1024"]
                 
             tong_so_cau = len(phan1_goc) + len(phan2_goc) + len(phan3_goc)
             if tong_so_cau == 0:
@@ -340,7 +340,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         r_note = p_r.add_run(f"Đề có {note_str}")
                         r_note.font.name = 'Times New Roman'; r_note.font.size = Pt(9.5); r_note.italic = True
                         
-                        # 2. ĐỊNH DẠNG HỌ TÊN, SỐ BÁO BÁO DẠNH, MÃ ĐỀ (3 DÒNG TÁCH BIỆT)
+                        # 2. ĐỊNH DẠNG HỌ TÊN, SỐ BÁO DẠNH, MÃ ĐỀ (3 DÒNG TÁCH BIỆT)
                         p_name = doc.add_paragraph()
                         p_name.paragraph_format.space_before = Pt(8)
                         p_name.paragraph_format.space_after = Pt(2)
@@ -456,12 +456,15 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         doc.save(doc_io)
                         zip_file.writestr(f"{ma_de}.docx", doc_io.getvalue())
                     
-                    # --- XUẤT FILE EXCEL ĐÁP ÁN THEO ĐÚNG MẪU BẢNG MA TRẬN ---
+                    # --- XUẤT FILE EXCEL ĐÁP ÁN MATRẬN ĐỒNG BỘ 100% THEO FILE MẪU DAP AN_K10TN.xlsx ---
                     wb_excel = openpyxl.Workbook()
                     ws_excel = wb_excel.active
                     ws_excel.title = "Sheet1"
 
-                    header = ['Câu'] + [str(m) for m in danh_sach_ma_de]
+                    # Dòng 1: Tiêu đề Cột
+                    header = ['Câu']
+                    for m in danh_sach_ma_de:
+                        header.append(int(m) if str(m).isdigit() else str(m))
                     ws_excel.append(header)
 
                     first_md = danh_sach_ma_de[0]
@@ -469,30 +472,34 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                     num_p2 = len(ma_de_answers[first_md]['p2'])
                     num_p3 = len(ma_de_answers[first_md]['p3'])
 
-                    # Hàng Phần I (1 đến N câu)
+                    # Dòng Phần I (1 đến N câu)
                     for i in range(num_p1):
                         row = [i + 1]
                         for md in danh_sach_ma_de:
                             row.append(ma_de_answers[md]['p1'][i])
                         ws_excel.append(row)
 
-                    # Hàng Phần II (Gộp 4 ý thành 1 ô chuỗi 4 ký tự: ĐSĐS...)
+                    # Dòng Phần II (Gộp 4 ý thành 1 ô chuỗi 4 ký tự: ĐSĐS...)
                     for i in range(num_p2):
                         row = [i + 1]
                         for md in danh_sach_ma_de:
                             row.append(ma_de_answers[md]['p2'][i])
                         ws_excel.append(row)
 
-                    # Hàng Phần III (Định dạng General/Chuỗi)
+                    # Dòng Phần III (Định dạng số nguyên là int, số thập phân là string General)
                     for i in range(num_p3):
                         row = [i + 1]
                         for md in danh_sach_ma_de:
-                            row.append(str(ma_de_answers[md]['p3'][i]))
+                            val = str(ma_de_answers[md]['p3'][i]).strip()
+                            if val.isdigit():
+                                val = int(val)
+                            row.append(val)
                         ws_excel.append(row)
 
+                    # Định dạng hiển thị chuẩn mực theo file DAP AN_K10TN.xlsx
                     align_center = Alignment(horizontal='center', vertical='center')
                     font_header = Font(name='Calibri', size=11, bold=True)
-                    font_cell = Font(name='Calibri', size=11)
+                    font_cell = Font(name='Calibri', size=11, bold=False)
 
                     for row in ws_excel.iter_rows(min_row=1, max_row=ws_excel.max_row, min_col=1, max_col=ws_excel.max_column):
                         for cell in row:
@@ -503,13 +510,15 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                             else:
                                 cell.font = font_cell
 
+                    ws_excel.column_dimensions['A'].width = 9.0
+
                     excel_io = io.BytesIO()
                     wb_excel.save(excel_io)
                     zip_file.writestr("Bang_Dap_An_Cac_Ma_De.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công! Đã tạo file Excel đáp án ma trận chuẩn 100% mẫu quy định.")
+                st.success("🎉 Trộn đề thành công! Đã tạo file Excel đáp án ma trận khớp 100% mẫu quy định DAP AN_K10TN.xlsx.")
                 st.download_button(
-                    label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
+                    label="📥 TẢI XUẤN TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
                     file_name="Bo_De_Thi_Chuyen_Nghiep.zip",
                     mime="application/zip",
