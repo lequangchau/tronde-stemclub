@@ -460,7 +460,7 @@ uploaded_file = st.file_uploader("Bước 1: Tải lên file Word đề gốc (.
 if uploaded_file is not None:
     st.success(f"✅ Đã nhận file: **{uploaded_file.name}**")
 
-if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type="primary"):
+if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án", type="primary"):
     if uploaded_file is None:
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
@@ -725,7 +725,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                     wb_excel.save(excel_io)
                     zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công! Đã chuẩn hóa căn lề Tab, tự động bóc tách và phân bố phương án cực kỳ chuẩn thẩm mỹ!")
+                st.success("🎉 Trộn đề thành công!")
                 st.download_button(
                     label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
