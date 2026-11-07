@@ -15,16 +15,16 @@ import openpyxl
 from openpyxl.styles import Alignment, Font
 import pandas as pd
 
-# 1. CẤU HÌNH TRANG WEB STREAMLIT
+# 1. CẤU HÌNH TRANG WEB
 st.set_page_config(page_title="Trộn Đề Kiểm tra môn Vật Lí", page_icon="📝", layout="centered")
 
 st.title("📝 Dự án CLB STEM: Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc đề của Bộ GD&ĐT")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT")
 
 st.divider()
 
-# 2. HÀM TRÍCH XUẤT VĂN BẢN VÀ XỬ LÝ XML CÔNG THỨC & HÌNH ẢNH
+# 2. TRÍCH XUẤT VĂN BẢN VÀ XỬ LÝ XML CÔNG THỨC & HÌNH ẢNH
 def get_node_text(node):
     """Trích xuất toàn bộ chữ trong đoạn văn XML, bao gồm chữ thường (<w:t>) và công thức toán (<m:t>)"""
     if node.tag.endswith('}t'):
