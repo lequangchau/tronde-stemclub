@@ -338,7 +338,7 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
             doc_tmp.paragraphs[0].paragraph_format.space_after = Pt(2)
             append_elem(doc, doc_tmp.paragraphs[0]._element)
 
-# 6. ĐỌC VÀ BẢO TOÀN TRỌN VẸN CÔNG THỨC & THÂN CÂU HỎI
+# 6. ĐỌC VÀ XÁC ĐỊNH CÔNG THỨC & NỘI DUNG CÂU HỎI
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1, phan2, phan3 = [], [], []
@@ -468,7 +468,7 @@ def doc_de_goc(file_stream):
 
     return doc, phan1, phan2, phan3
 
-# 7. KHU VỰC THIẾT LẬP THÔNG TIN (UI STREAMLIT)
+# 7. THIẾT LẬP THÔNG TIN
 with st.expander("⚙️ **THÔNG TIN TIÊU ĐỀ ĐỀ KIỂM TRA & CÁC MÃ ĐỀ**", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
