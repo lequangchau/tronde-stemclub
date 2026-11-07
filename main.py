@@ -477,7 +477,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
     if uploaded_file is None:
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
-        with st.spinner("Đang khởi tạo mã đề thi và xuất file Excel đáp án ma trận..."):
+        with st.spinner("Đang tạo các mã đề kiểm tra và xuất file Excel đáp án dạng ma trận..."):
             doc_goc_obj, phan1_goc, phan2_goc, phan3_goc = doc_de_goc(uploaded_file)
             
             danh_sach_ma_de = [m.strip() for m in ds_ma_de_input.split(",") if m.strip()]
