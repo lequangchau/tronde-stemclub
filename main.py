@@ -60,7 +60,7 @@ with st.container():
         file_mau_data = load_file_mau_bytes()
         if file_mau_data:
             st.download_button(
-                label=f"📥 Tải {FILE_MAU_TEN}",
+                label=f"📥 {FILE_MAU_TEN}",
                 data=file_mau_data,
                 file_name=FILE_MAU_TEN,
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
