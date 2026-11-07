@@ -126,7 +126,7 @@ def Has_Auto_Numbering(p):
         return True
     return False
 
-# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN (ĐẮM BẢO CHÍNH XÁC KHI CÓ CHỮ A, B, C, D TRONG CÂU)
+# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN
 def split_paragraph_options(p_elem):
     children = [child for child in p_elem if not child.tag.endswith('}pPr')]
     if not children:
@@ -223,7 +223,7 @@ def split_paragraph_options(p_elem):
         })
     return groups
 
-# 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (XÓA THỤT LỀ, CĂN ĐỀU 2 BÊN, THẲNG MÉP LỀ TRÁI)
+# 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (XÓA SẠCH TAB THỪA, BẢO TOÀN NGUYÊN VẸN TỪ NGỮ CÂU HỎI)
 def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     elem_copied = Copy_Element_With_Media(p_elem, doc_src, doc_target, rid_map)
     doc_temp = Document()
@@ -231,8 +231,12 @@ def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     p = doc_temp.paragraphs[0]
     Set_Paragraph_Justify_And_Zero_Indent(p)
     
+    # Xóa sạch các thẻ <w:tab/> thừa trước khi tính độ dài chuỗi
+    for tab in p._element.xpath('.//w:tab'):
+        tab.getparent().remove(tab)
+        
     full_text = get_node_text(p._element)
-    match = re.match(r'^[\s\t\xa0]*(?:Câu|Cau)?\s*\d+[\.\:\-\)\s\xa0]*', full_text, re.IGNORECASE)
+    match = re.match(r'^[\s\t\xa0]*(?:(?:Câu|Cau)\s*\d+|\d+)[\.\:\-\)][\s\t\xa0]*', full_text, re.IGNORECASE)
     if match and match.group(0).strip():
         prefix_len = len(match.group(0))
         remains = prefix_len
@@ -243,7 +247,7 @@ def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
                 remains -= len(r.text)
                 r.text = ""
             else:
-                r.text = r.text[remains:].lstrip()
+                r.text = r.text[remains:]
                 remains = 0
                 break
                 
@@ -261,11 +265,12 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
     p = doc_temp.paragraphs[0]
     Set_Paragraph_Justify_And_Zero_Indent(p)
     
+    # Xóa sạch các thẻ <w:tab/> thừa trước khi tính độ dài chuỗi
     for tab in p._element.xpath('.//w:tab'):
         tab.getparent().remove(tab)
         
     full_text = get_node_text(p._element)
-    match = re.match(r'^[\s\t\xa0]*[A-Da-d0-9][\.\:\-\)\s\xa0]*', full_text)
+    match = re.match(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)][\s\t\xa0]*', full_text)
     if match:
         prefix_len = len(match.group(0))
         remains = prefix_len
@@ -276,7 +281,7 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
                 remains -= len(r.text)
                 r.text = ""
             else:
-                r.text = r.text[remains:].lstrip()
+                r.text = r.text[remains:]
                 remains = 0
                 break
                 
