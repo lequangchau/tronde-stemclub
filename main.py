@@ -122,30 +122,30 @@ def Has_Auto_Numbering(p):
         return True
     return False
 
-# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN
+# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN (THUẬT TOÁN ÁNH XẠ CHUỖI NÂNG CẤP)
 def split_paragraph_options(p_elem):
-    children = []
-    for child in p_elem:
-        if not child.tag.endswith('}pPr'):
-            children.append(child)
-            
-    groups = []
-    current_group = []
-    
-    for child in children:
-        c_text = get_node_text(child).strip()
-        m = re.match(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]', c_text)
-        if m and current_group:
-            groups.append(current_group)
-            current_group = [child]
-        else:
-            current_group.append(child)
-            
-    if current_group:
-        groups.append(current_group)
-        
-    if len(groups) <= 1:
+    children = [child for child in p_elem if not child.tag.endswith('}pPr')]
+    if not children:
         full_text = get_node_text(p_elem).strip()
+        clean_text = re.sub(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]*', '', full_text).strip()
+        return [{"elem": p_elem, "text": clean_text, "is_under": False}]
+
+    full_str = ""
+    char_to_child_idx = []
+    for idx, child in enumerate(children):
+        c_txt = get_node_text(child)
+        if not c_txt and ("drawing" in child.xml or "graphic" in child.xml or "pict" in child.xml or "object" in child.xml):
+            c_txt = " [IMG] "
+        for ch in c_txt:
+            full_str += ch
+            char_to_child_idx.append(idx)
+
+    # Quét vị trí của A. B. C. D. trên toàn bộ đoạn văn
+    pattern = re.compile(r'(?:^|[\s\t\xa0]+)([A-Da-d][\.\:\-\)\s\xa0])')
+    matches = list(pattern.finditer(full_str))
+
+    if len(matches) <= 1:
+        full_text = full_str.strip()
         clean_text = re.sub(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]*', '', full_text).strip()
         is_under = False
         for r in p_elem.iter():
@@ -158,15 +158,27 @@ def split_paragraph_options(p_elem):
                         break
         return [{"elem": p_elem, "text": clean_text, "is_under": is_under}]
 
-    options = []
-    for grp in groups:
+    groups = []
+    start_child_indices = []
+    for m in matches:
+        pos = m.start(1)
+        c_idx = char_to_child_idx[pos] if pos < len(char_to_child_idx) else len(children) - 1
+        if not start_child_indices or start_child_indices[-1] != c_idx:
+            start_child_indices.append(c_idx)
+
+    for i in range(len(start_child_indices)):
+        c_start = start_child_indices[i]
+        c_end = start_child_indices[i+1] if i + 1 < len(start_child_indices) else len(children)
+        grp_children = children[c_start:c_end]
+        
         new_p = copy.deepcopy(p_elem)
         for child in list(new_p):
             if not child.tag.endswith('}pPr'):
                 new_p.remove(child)
+                
         is_under = False
         grp_text = ""
-        for child in grp:
+        for child in grp_children:
             new_p.append(copy.deepcopy(child))
             grp_text += get_node_text(child)
             for r in child.iter():
@@ -178,12 +190,12 @@ def split_paragraph_options(p_elem):
                             is_under = True
 
         clean_text = re.sub(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]*', '', grp_text.strip()).strip()
-        options.append({
+        groups.append({
             "elem": new_p,
             "text": clean_text,
             "is_under": is_under
         })
-    return options
+    return groups
 
 # 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (XÓA THỤT LỀ, CĂN ĐỀU 2 BÊN, THẲNG MÉP LỀ TRÁI)
 def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
@@ -767,7 +779,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
 
                 st.success("🎉 Trộn đề thành công!")
                 st.download_button(
-                    label="📥 TẢI XUẤT TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
+                    label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
                     file_name="DE_DA_TRON.zip",
                     mime="application/zip",
