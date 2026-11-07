@@ -93,13 +93,21 @@ def doc_de_goc(file_stream):
 
     return phan1, phan2, phan3
 
-# 4. XỬ LÝ TRỘN ĐỀ VÀ TẠO BỘ ĐỀ
+# 4. XỬ LÝ GIAO DIỆN VÀ TRỘN ĐỀ
 uploaded_file = st.file_uploader("Bước 1: Tải lên file Word đề gốc (.docx)", type=["docx"])
+
+# Hiển thị thông báo trạng thái ngay khi có file
+if uploaded_file is not None:
+    st.success(f"✅ Đã tải lên file thành công: **{uploaded_file.name}**")
+
 so_ma_de = st.number_input("Bước 2: Nhập số lượng mã đề muốn tạo", min_value=1, max_value=20, value=4, step=1)
 
-if uploaded_file is not None:
-    if st.button("Bước 3: Bắt Đầu Trộn Đề & Sinh Đáp Án"):
-        with st.spinner("Đang xử lý dữ liệu..."):
+# Nút bấm Trộn đề
+if st.button("🚀 Bước 3: Bắt Đầu Trộn Đề & Sinh Đáp Án", type="primary"):
+    if uploaded_file is None:
+        st.warning("⚠️ Thầy/cô vui lòng chọn file đề gốc (.docx) ở Bước 1 trước khi bấm trộn đề!")
+    else:
+        with st.spinner("Đang phân tích đề thi và tạo các mã đề..."):
             phan1_goc, phan2_goc, phan3_goc = doc_de_goc(uploaded_file)
             
             zip_buffer = io.BytesIO()
@@ -180,10 +188,13 @@ if uploaded_file is not None:
                     df.to_excel(writer, index=False, sheet_name="Dap_An_Tong_Hop")
                 zip_file.writestr("Bang_Dap_An_Cac_Ma_De.xlsx", excel_io.getvalue())
 
-            st.success("🎉 Trộn đề hoàn tất thành công!")
+            st.success("🎉 Trộn đề thành công!")
+            
+            # Nút tải file zip hiện ngay bên dưới
             st.download_button(
                 label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                 data=zip_buffer.getvalue(),
                 file_name="Bo_De_Thi_Va_Dap_An.zip",
-                mime="application/zip"
+                mime="application/zip",
+                type="primary"
             )
