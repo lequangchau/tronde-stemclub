@@ -20,7 +20,7 @@ st.set_page_config(page_title="Phần mềm Trộn Đề Kiểm tra môn Vật L
 
 st.title("📝 Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí Online")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT (Bảo toàn 100% Hình ảnh, Đồ thị, Bảng biểu, MathType & Font Times New Roman 12pt).")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT (Bảo toàn 100% Hình ảnh, Đồ thị, Bảng biểu, MathType & Lọc bỏ Lời giải tự động).")
 
 st.divider()
 
@@ -200,12 +200,17 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
             elem = Lay_Noi_Dung_Phuong_An_Clean(opt["elem"], doc_src, doc, rid_map, prefix)
             append_elem(doc, elem)
 
-# 5. ĐỌC VÀ BẢO TOÀN TRỌN VẸN NỘI DUNG THÂN CÂU HỎI (BAO GỒM CẢ HÌNH ẢNH)
+# 5. ĐỌC VÀ BẢO TOÀN TRỌN VẸN THÂN CÂU HỎI (BỎ TOÀN BỘ PHẦN LỜI GIẢI / ĐÁP ÁN KHỎI BÀI THI)
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1, phan2, phan3 = [], [], []
     current_section = None
     current_item = None
+    in_solution = False
+
+    def is_sol_header(line):
+        pattern = r'^(?:Lời\s*giải|Hướng\s*dẫn\s*giải|HDG|Giải\s*chi\s*tiết|Đáp\s*án|Đáp\s*số|ĐS|ĐA|Giải)\b[\:\-\.\s]*'
+        return bool(re.match(pattern, line, re.IGNORECASE))
 
     for p in doc.paragraphs:
         line = p.text.strip()
@@ -218,58 +223,75 @@ def doc_de_goc(file_stream):
             if current_item:
                 if current_section == 1: phan1.append(current_item)
                 elif current_section == 2: phan2.append(current_item)
+                elif current_section == 3: phan3.append(current_item)
                 current_item = None
             current_section = 3
+            in_solution = False
             continue
         elif re.search(r'(?:\[?\s*PHAN[_\s]*2\s*\]?|PHẦN\s*(II|2)\b)', line, re.IGNORECASE):
             if current_item:
                 if current_section == 1: phan1.append(current_item)
                 elif current_section == 2: phan2.append(current_item)
+                elif current_section == 3: phan3.append(current_item)
                 current_item = None
             current_section = 2
+            in_solution = False
             continue
         elif re.search(r'(?:\[?\s*PHAN[_\s]*1\s*\]?|PHẦN\s*(I|1)\b)', line, re.IGNORECASE):
             if current_item:
                 if current_section == 1: phan1.append(current_item)
                 elif current_section == 2: phan2.append(current_item)
+                elif current_section == 3: phan3.append(current_item)
                 current_item = None
             current_section = 1
+            in_solution = False
             continue
 
         is_question = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', line, re.IGNORECASE))
+        if is_question:
+            in_solution = False
+
+        if is_sol_header(line):
+            in_solution = True
 
         if current_section == 1:
             if is_question:
                 if current_item: phan1.append(current_item)
                 current_item = {"q_elems": [p._element], "options": [], "correct_idx": None}
-            elif re.match(r'^[A-Da-d][\.\:\-\)\s]', line) and current_item:
-                clean_opt_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', line).strip()
-                is_under = Kiem_Tra_Gach_Chan(p)
-                opt_idx = len(current_item["options"])
-                current_item["options"].append({
-                    "elem": p._element,
-                    "text": clean_opt_text
-                })
-                if is_under:
-                    current_item["correct_idx"] = opt_idx
-            elif current_item:
-                if len(current_item["options"]) == 0:
+            elif current_item and not in_solution:
+                if re.match(r'^[A-Da-d][\.\:\-\)\s]', line):
+                    clean_opt_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', line).strip()
+                    is_under = Kiem_Tra_Gach_Chan(p)
+                    opt_idx = len(current_item["options"])
+                    current_item["options"].append({
+                        "elem": p._element,
+                        "text": clean_opt_text
+                    })
+                    if is_under:
+                        current_item["correct_idx"] = opt_idx
+                elif len(current_item["options"]) == 0:
                     current_item["q_elems"].append(p._element)
+            elif current_item and in_solution:
+                if current_item["correct_idx"] is None:
+                    m_ans = re.search(r'(?:Chọn|Đáp\s*án|ĐA)\s*([A-D])\b', line, re.IGNORECASE)
+                    if m_ans:
+                        ans_char = m_ans.group(1).upper()
+                        current_item["correct_idx"] = ord(ans_char) - ord('A')
 
         elif current_section == 2:
             if is_question:
                 if current_item: phan2.append(current_item)
                 current_item = {"q_elems": [p._element], "sub_options": []}
-            elif re.match(r'^[A-Da-d][\.\:\-\)\s]', line) and current_item:
-                clean_sub_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', line).strip()
-                is_under = Kiem_Tra_Gach_Chan(p)
-                current_item["sub_options"].append({
-                    "elem": p._element,
-                    "text": clean_sub_text,
-                    "is_correct": "Đúng" if is_under else "Sai"
-                })
-            elif current_item:
-                if len(current_item["sub_options"]) == 0:
+            elif current_item and not in_solution:
+                if re.match(r'^[A-Da-d][\.\:\-\)\s]', line):
+                    clean_sub_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', line).strip()
+                    is_under = Kiem_Tra_Gach_Chan(p)
+                    current_item["sub_options"].append({
+                        "elem": p._element,
+                        "text": clean_sub_text,
+                        "is_correct": "Đúng" if is_under else "Sai"
+                    })
+                elif len(current_item["sub_options"]) == 0:
                     current_item["q_elems"].append(p._element)
 
         elif current_section == 3:
@@ -277,11 +299,15 @@ def doc_de_goc(file_stream):
                 if current_item: phan3.append(current_item)
                 current_item = {"q_elems": [p._element], "correct": ""}
             elif current_item:
-                if re.search(r'(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA|Đáp)\b', line, re.IGNORECASE):
-                    current_item["correct"] = re.sub(r'^.*?(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA|Đáp)\s*[\:\-\.]*\s*', '', line, flags=re.IGNORECASE).strip()
-                elif not line.lower().startswith("lời giải") and not current_item["correct"]:
-                    current_item["correct"] = line.strip()
-                else:
+                if is_sol_header(line):
+                    if re.search(r'(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA)\b', line, re.IGNORECASE):
+                        ans_val = re.sub(r'^.*?(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA)\s*[\:\-\.]*\s*', '', line, flags=re.IGNORECASE).strip()
+                        if ans_val:
+                            current_item["correct"] = ans_val
+                elif in_solution:
+                    if not current_item["correct"] and line.strip() and not line.lower().startswith("lời giải"):
+                        current_item["correct"] = line.strip()
+                elif not in_solution:
                     current_item["q_elems"].append(p._element)
 
     if current_item:
@@ -423,11 +449,9 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                             p1_shuffled = copy.deepcopy(phan1_goc)
                             random.shuffle(p1_shuffled)
                             for idx, q in enumerate(p1_shuffled):
-                                # Đoạn 1 chứa chữ "Câu X: ..."
                                 updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {idx + 1}: ")
                                 append_elem(doc, updated_q0)
                                 
-                                # Tất cả các đoạn đính kèm thuộc thân câu hỏi (Đồ thị, hình ảnh...)
                                 for sub_elem in q["q_elems"][1:]:
                                     sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
                                     append_elem(doc, sub_copied)
@@ -575,7 +599,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                     wb_excel.save(excel_io)
                     zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công! ")
+                st.success("🎉 Trộn đề thành công! Đã bảo toàn 100% hình ảnh & tự động loại bỏ Lời giải khỏi bài thi.")
                 st.download_button(
                     label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
