@@ -16,11 +16,11 @@ from openpyxl.styles import Alignment, Font
 import pandas as pd
 
 # 1. CẤU HÌNH TRANG WEB STREAMLIT
-st.set_page_config(page_title="Công Cụ Trộn Đề Kiểm tra môn Vật Lí", page_icon="📝", layout="centered")
+st.set_page_config(page_title="Trộn Đề Kiểm tra môn Vật Lí", page_icon="📝", layout="centered")
 
-st.title("📝 Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí")
+st.title("📝 Dự án CLB STEM: Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc đề của Bộ GD&ĐT")
 
 st.divider()
 
@@ -45,12 +45,32 @@ def Thiet_Lap_Font_Times_New_Roman(doc):
     rFonts = parse_xml(r'<w:rFonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman" w:eastAsia="Times New Roman"/>')
     rPr.append(rFonts)
 
-def Set_Paragraph_Justify(p):
-    """Thiết lập căn đều 2 bên (Justify) chuẩn cấu trúc OpenXML"""
+def Set_Paragraph_Justify_And_Zero_Indent(p):
+    """Thiết lập căn đều 2 bên (Justify) và xóa 100% thụt lề (Left Indent, First Line Indent = 0)"""
     pPr = p._element.pPr
     if pPr is None:
         pPr = parse_xml(r'<w:pPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>')
         p._element.insert(0, pPr)
+        
+    # Xóa các thuộc tính style và indent tồn đọng từ đề gốc
+    pStyle = pPr.find(qn('w:pStyle'))
+    if pStyle is not None:
+        pPr.remove(pStyle)
+        
+    numPr = pPr.find(qn('w:numPr'))
+    if numPr is not None:
+        pPr.remove(numPr)
+        
+    ind = pPr.find(qn('w:ind'))
+    if ind is not None:
+        pPr.remove(ind)
+        
+    # Đặt lề trái, lề phải, thụt dòng về 0
+    p.paragraph_format.left_indent = Cm(0)
+    p.paragraph_format.first_line_indent = Cm(0)
+    p.paragraph_format.right_indent = Cm(0)
+    
+    # Cài đặt thuộc tính căn đều 2 bên (Justify)
     jc = pPr.find(qn('w:jc'))
     if jc is not None:
         jc.set(qn('w:val'), 'both')
@@ -170,18 +190,14 @@ def split_paragraph_options(p_elem):
         })
     return options
 
-# 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (BẢO TOÀN CẤU TRÚC OPENXML & CĂN ĐỀU 2 BÊN)
+# 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (XÓA THỤT LỀ, CĂN ĐỀU 2 BÊN, THẲNG MÉP LỀ TRÁI)
 def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     elem_copied = Copy_Element_With_Media(p_elem, doc_src, doc_target, rid_map)
     doc_temp = Document()
     append_elem(doc_temp, elem_copied)
     p = doc_temp.paragraphs[0]
-    Set_Paragraph_Justify(p)
+    Set_Paragraph_Justify_And_Zero_Indent(p)
     
-    pPr = p._element.pPr
-    if pPr is not None and pPr.numPr is not None:
-        pPr.remove(pPr.numPr)
-        
     full_text = get_node_text(p._element)
     match = re.match(r'^(Câu|Cau)?\s*\d+[\.\:\-\)\s]*', full_text, re.IGNORECASE)
     if match and match.group(0).strip():
@@ -210,12 +226,8 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
     doc_temp = Document()
     append_elem(doc_temp, elem_copied)
     p = doc_temp.paragraphs[0]
-    Set_Paragraph_Justify(p)
+    Set_Paragraph_Justify_And_Zero_Indent(p)
     
-    pPr = p._element.pPr
-    if pPr is not None and pPr.numPr is not None:
-        pPr.remove(pPr.numPr)
-        
     for tab in p._element.xpath('.//w:tab'):
         tab.getparent().remove(tab)
         
@@ -243,7 +255,7 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
         p._element.pPr.addnext(r0._element)
     return p._element
 
-# 5. DÀN HÀNG ĐÁP ÁN PHẦN I CHUẨN THẨM MỸ (CĂN ĐỀU 2 BÊN & TAB CHUẨN A4)
+# 5. DÀN HÀNG ĐÁP ÁN PHẦN I CHUẨN THẨM MỸ (CĂN ĐỀU 2 BÊN, KHÔNG THỤT LỀ, TAB CHUẨN A4)
 def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
     total_len = sum(len(opt["text"]) for opt in opts)
     max_len = max(len(opt["text"]) for opt in opts) if opts else 0
@@ -251,7 +263,7 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
     
     if total_len <= 28 and max_len <= 8 and len(opts) == 4 and not has_math:
         p_combined = Document().add_paragraph()
-        Set_Paragraph_Justify(p_combined)
+        Set_Paragraph_Justify_And_Zero_Indent(p_combined)
         p_format = p_combined.paragraph_format
         p_format.space_before = Pt(0)
         p_format.space_after = Pt(2)
@@ -276,7 +288,7 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
         
     elif total_len <= 100 and max_len <= 32 and len(opts) == 4:
         p_line1 = Document().add_paragraph()
-        Set_Paragraph_Justify(p_line1)
+        Set_Paragraph_Justify_And_Zero_Indent(p_line1)
         p_line1.paragraph_format.space_before = Pt(0)
         p_line1.paragraph_format.space_after = Pt(1)
         p_line1.paragraph_format.tab_stops.add_tab_stop(Cm(8.5))
@@ -296,7 +308,7 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
         append_elem(doc, p_line1._element)
         
         p_line2 = Document().add_paragraph()
-        Set_Paragraph_Justify(p_line2)
+        Set_Paragraph_Justify_And_Zero_Indent(p_line2)
         p_line2.paragraph_format.space_before = Pt(0)
         p_line2.paragraph_format.space_after = Pt(2)
         p_line2.paragraph_format.tab_stops.add_tab_stop(Cm(8.5))
@@ -321,7 +333,7 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
             elem = Lay_Noi_Dung_Phuong_An_Clean(opt["elem"], doc_src, doc, rid_map, prefix)
             doc_tmp = Document()
             append_elem(doc_tmp, elem)
-            Set_Paragraph_Justify(doc_tmp.paragraphs[0])
+            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
             doc_tmp.paragraphs[0].paragraph_format.space_before = Pt(0)
             doc_tmp.paragraphs[0].paragraph_format.space_after = Pt(2)
             append_elem(doc, doc_tmp.paragraphs[0]._element)
@@ -462,10 +474,10 @@ with st.expander("⚙️ **THÔNG TIN TIÊU ĐỀ ĐỀ KIỂM TRA & CÁC MÃ Đ
     with col1:
         so_gd = st.text_input("Sở Giáo dục & Đào tạo", value="SỞ GIÁO DỤC VÀ ĐÀO TẠO TP.HCM")
         ten_truong = st.text_input("Tên Trường", value="TRƯỜNG THPT THỦ ĐỨC")
-        ten_ky_thi = st.text_input("Tên Kỳ Thi", value="KIỂM TRA ĐỊNH KÌ GIỮA HỌC KÌ I")
+        ten_ky_thi = st.text_input("Tên Kỳ Thi", value="KIỂM TRA ĐỊNH KÌ HỌC KÌ I")
     with col2:
         mon_thi = st.text_input("Môn thi / Khối", value="MÔN VẬT LÍ - KHỐI 12")
-        thoi_gian = st.text_input("Thời gian làm bài", value="45 phút")
+        thoi_gian = st.text_input("Thời gian làm bài", value="50 phút")
         ds_ma_de_input = st.text_input("Danh sách Mã Đề (cách nhau bởi dấu phẩy)", value="1021, 1022, 1023, 1024")
 
 uploaded_file = st.file_uploader("Bước 1: Tải lên file Word đề gốc (.docx)", type=["docx"])
@@ -477,7 +489,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
     if uploaded_file is None:
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
-        with st.spinner("Đang tạo các mã đề kiểm tra và xuất file Excel đáp án dạng ma trận..."):
+        with st.spinner("Đang khởi tạo mã đề thi và xuất file Excel đáp án ma trận..."):
             doc_goc_obj, phan1_goc, phan2_goc, phan3_goc = doc_de_goc(uploaded_file)
             
             danh_sach_ma_de = [m.strip() for m in ds_ma_de_input.split(",") if m.strip()]
@@ -579,7 +591,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         # 3. TRỘN PHẦN I
                         if phan1_goc:
                             p_head1 = doc.add_paragraph()
-                            Set_Paragraph_Justify(p_head1)
+                            Set_Paragraph_Justify_And_Zero_Indent(p_head1)
                             p_head1.paragraph_format.space_before = Pt(6)
                             p_head1.paragraph_format.space_after = Pt(4)
                             r_h1 = p_head1.add_run(f"PHẦN I. Thí sinh trả lời từ câu 1 đến câu {len(phan1_goc)}. Mỗi câu hỏi thí sinh chỉ chọn một phương án.")
@@ -596,7 +608,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                     sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
                                     doc_tmp = Document()
                                     append_elem(doc_tmp, sub_copied)
-                                    Set_Paragraph_Justify(doc_tmp.paragraphs[0])
+                                    Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
                                     append_elem(doc, doc_tmp.paragraphs[0]._element)
                                 
                                 opts = q["options"]
@@ -616,7 +628,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         # 4. TRỘN PHẦN II
                         if phan2_goc:
                             p_head2 = doc.add_paragraph()
-                            Set_Paragraph_Justify(p_head2)
+                            Set_Paragraph_Justify_And_Zero_Indent(p_head2)
                             p_head2.paragraph_format.space_before = Pt(10)
                             p_head2.paragraph_format.space_after = Pt(4)
                             r_h2 = p_head2.add_run(f"PHẦN II. Thí sinh trả lời từ câu 1 đến câu {len(phan2_goc)}. Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn đúng hoặc sai.")
@@ -633,7 +645,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                     sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
                                     doc_tmp = Document()
                                     append_elem(doc_tmp, sub_copied)
-                                    Set_Paragraph_Justify(doc_tmp.paragraphs[0])
+                                    Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
                                     append_elem(doc, doc_tmp.paragraphs[0]._element)
                                 
                                 subs = q["sub_options"]
@@ -652,7 +664,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         # 5. TRỘN PHẦN III
                         if phan3_goc:
                             p_head3 = doc.add_paragraph()
-                            Set_Paragraph_Justify(p_head3)
+                            Set_Paragraph_Justify_And_Zero_Indent(p_head3)
                             p_head3.paragraph_format.space_before = Pt(10)
                             p_head3.paragraph_format.space_after = Pt(4)
                             r_h3 = p_head3.add_run(f"PHẦN III. Thí sinh trả lời từ câu 1 đến câu {len(phan3_goc)}.")
@@ -669,7 +681,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                     sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
                                     doc_tmp = Document()
                                     append_elem(doc_tmp, sub_copied)
-                                    Set_Paragraph_Justify(doc_tmp.paragraphs[0])
+                                    Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
                                     append_elem(doc, doc_tmp.paragraphs[0]._element)
                                     
                                 ma_de_answers[ma_de]['p3'].append(str(q["correct"]).strip())
