@@ -15,16 +15,16 @@ import openpyxl
 from openpyxl.styles import Alignment, Font
 import pandas as pd
 
-# 1. CẤU HÌNH TRANG WEB STREAMLIT
-st.set_page_config(page_title="Phần mềm Trộn Đề Kiểm tra môn Vật Lí", page_icon="📝", layout="centered")
+# 1. CẤU HÌNH TRANG WEB
+st.set_page_config(page_title="Trộn Đề Kiểm tra môn Vật Lí", page_icon="📝", layout="centered")
 
-st.title("📝 Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí Online")
+st.title("📝 Dự án CLB STEM: Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT (Căn đều 2 bên Justify, Triệt phá thụt lề câu hỏi, In đậm chữ HẾT, Bảo toàn công thức MathType/OMML & Hình ảnh).")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT")
 
 st.divider()
 
-# 2. HÀM XỬ LÝ XML, CÔNG THỨC & HÌNH ẢNH
+# 2. TRÍCH XUẤT VĂN BẢN VÀ XỬ LÝ XML CÔNG THỨC & HÌNH ẢNH
 def get_node_text(node):
     """Trích xuất toàn bộ chữ trong đoạn văn XML, bao gồm chữ thường (<w:t>) và công thức toán (<m:t>)"""
     if node.tag.endswith('}t'):
@@ -34,12 +34,6 @@ def get_node_text(node):
         if child.tag.endswith('}t'):
             text += child.text or ""
     return text
-
-def Has_Auto_Numbering(p):
-    pPr = p._element.pPr
-    if pPr is not None and pPr.numPr is not None:
-        return True
-    return False
 
 def Thiet_Lap_Font_Times_New_Roman(doc):
     style = doc.styles['Normal']
@@ -91,11 +85,15 @@ def Copy_Element_With_Media(p_elem, doc_src, doc_target, rid_map):
                     if old_rid not in rid_map:
                         rel = doc_src.part.rels[old_rid]
                         try:
-                            if rel.is_external:
+                            if "image" in rel.reltype:
+                                new_rid = doc_target.part.relate_to(rel.target_part, rel.reltype)
+                                rid_map[old_rid] = str(new_rid)
+                            elif rel.is_external:
                                 new_rid = doc_target.part.rels.get_or_add_ext_rel(rel.reltype, rel.target_ref)
+                                rid_map[old_rid] = str(new_rid)
                             else:
                                 new_rid = doc_target.part.relate_to(rel.target_part, rel.reltype)
-                            rid_map[old_rid] = str(new_rid)
+                                rid_map[old_rid] = str(new_rid)
                         except Exception:
                             pass
                     if old_rid in rid_map and rid_map[old_rid] and rid_map[old_rid] != 'False':
@@ -117,29 +115,37 @@ def Kiem_Tra_Gach_Chan(paragraph):
                 return True
     return False
 
-# 3. HÀM TÁCH PHƯƠNG ÁN CÙNG DÒNG
+def Has_Auto_Numbering(p):
+    """Kiểm tra xem đoạn văn có sử dụng tính năng Đánh số tự động (Bullets and Numbering) của Word hay không"""
+    pPr = p._element.pPr
+    if pPr is not None and pPr.numPr is not None:
+        return True
+    return False
+
+# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN
 def split_paragraph_options(p_elem):
-    children = [child for child in p_elem if not child.tag.endswith('}pPr')]
-    if not children:
+    children = []
+    for child in p_elem:
+        if not child.tag.endswith('}pPr'):
+            children.append(child)
+            
+    groups = []
+    current_group = []
+    
+    for child in children:
+        c_text = get_node_text(child).strip()
+        m = re.match(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]', c_text)
+        if m and current_group:
+            groups.append(current_group)
+            current_group = [child]
+        else:
+            current_group.append(child)
+            
+    if current_group:
+        groups.append(current_group)
+        
+    if len(groups) <= 1:
         full_text = get_node_text(p_elem).strip()
-        clean_text = re.sub(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]*', '', full_text).strip()
-        return [{"elem": p_elem, "text": clean_text, "is_under": False}]
-
-    full_str = ""
-    char_to_child_idx = []
-    for idx, child in enumerate(children):
-        c_txt = get_node_text(child)
-        if not c_txt and ("drawing" in child.xml or "graphic" in child.xml or "pict" in child.xml):
-            c_txt = " [IMG] "
-        for ch in c_txt:
-            full_str += ch
-            char_to_child_idx.append(idx)
-
-    pattern = re.compile(r'(?:^|[\s\t\xa0]+)([A-Da-d][\.\:\-\)\s\xa0])')
-    matches = list(pattern.finditer(full_str))
-
-    if len(matches) <= 1:
-        full_text = full_str.strip()
         clean_text = re.sub(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]*', '', full_text).strip()
         is_under = False
         for r in p_elem.iter():
@@ -152,27 +158,15 @@ def split_paragraph_options(p_elem):
                         break
         return [{"elem": p_elem, "text": clean_text, "is_under": is_under}]
 
-    groups = []
-    start_child_indices = []
-    for m in matches:
-        pos = m.start(1)
-        c_idx = char_to_child_idx[pos] if pos < len(char_to_child_idx) else len(children) - 1
-        if not start_child_indices or start_child_indices[-1] != c_idx:
-            start_child_indices.append(c_idx)
-
-    for i in range(len(start_child_indices)):
-        c_start = start_child_indices[i]
-        c_end = start_child_indices[i+1] if i + 1 < len(start_child_indices) else len(children)
-        grp_children = children[c_start:c_end]
-        
+    options = []
+    for grp in groups:
         new_p = copy.deepcopy(p_elem)
         for child in list(new_p):
             if not child.tag.endswith('}pPr'):
                 new_p.remove(child)
-                
         is_under = False
         grp_text = ""
-        for child in grp_children:
+        for child in grp:
             new_p.append(copy.deepcopy(child))
             grp_text += get_node_text(child)
             for r in child.iter():
@@ -184,14 +178,14 @@ def split_paragraph_options(p_elem):
                             is_under = True
 
         clean_text = re.sub(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]*', '', grp_text.strip()).strip()
-        groups.append({
+        options.append({
             "elem": new_p,
             "text": clean_text,
             "is_under": is_under
         })
-    return groups
+    return options
 
-# 4. CẬP NHẬT TIỀN TỐ CÂU & LÀM SẠCH ĐÁP ÁN
+# 4. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (XÓA THỤT LỀ, CĂN ĐỀU 2 BÊN, THẲNG MÉP LỀ TRÁI)
 def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     elem_copied = Copy_Element_With_Media(p_elem, doc_src, doc_target, rid_map)
     doc_temp = Document()
@@ -256,13 +250,13 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
         p._element.pPr.addnext(r0._element)
     return p._element
 
-# 5. DÀN HÀNG ĐÁP ÁN PHẦN I CHUẨN THẨM MỸ
+# 5. DÀN HÀNG ĐÁP ÁN PHẦN I CHUẨN THẨM MỸ (CĂN ĐỀU 2 BÊN, KHÔNG THỤT LỀ, TAB CHUẨN A4)
 def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
     total_len = sum(len(opt["text"]) for opt in opts)
     max_len = max(len(opt["text"]) for opt in opts) if opts else 0
-    has_math_or_img = any("oMath" in opt["elem"].xml or "drawing" in opt["elem"].xml or "graphic" in opt["elem"].xml for opt in opts)
+    has_math = any("oMath" in opt["elem"].xml for opt in opts)
     
-    if total_len <= 28 and max_len <= 8 and len(opts) == 4 and not has_math_or_img:
+    if total_len <= 28 and max_len <= 8 and len(opts) == 4 and not has_math:
         p_combined = Document().add_paragraph()
         Set_Paragraph_Justify_And_Zero_Indent(p_combined)
         p_format = p_combined.paragraph_format
@@ -287,7 +281,7 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
                 
         append_elem(doc, p_combined._element)
         
-    elif total_len <= 100 and max_len <= 32 and len(opts) == 4 and not has_math_or_img:
+    elif total_len <= 100 and max_len <= 32 and len(opts) == 4:
         p_line1 = Document().add_paragraph()
         Set_Paragraph_Justify_And_Zero_Indent(p_line1)
         p_line1.paragraph_format.space_before = Pt(0)
@@ -339,7 +333,7 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
             doc_tmp.paragraphs[0].paragraph_format.space_after = Pt(2)
             append_elem(doc, doc_tmp.paragraphs[0]._element)
 
-# 6. ĐỌC VÀ BÓC TÁCH CÂU HỎI ĐỀ GỐC (THUẬT TOÁN ĐA NĂNG ĐẮC LỰC)
+# 6. ĐỌC VÀ XÁC ĐỊNH CÔNG THỨC & NỘI DUNG CÂU HỎI
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1, phan2, phan3 = [], [], []
@@ -389,11 +383,11 @@ def doc_de_goc(file_stream):
             in_solution = False
             continue
 
-        is_explicit_q = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', full_line, re.IGNORECASE))
+        # Nhận diện chính xác Câu X với mọi dấu phân cách (., :, -, )) và loại trừ thông số số liệu đầu dòng
+        is_explicit_q = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', full_line, re.IGNORECASE)) or bool(re.match(r'^\d+[\.\:\-\)]', full_line))
         is_auto_num = Has_Auto_Numbering(p)
         is_opt_line = bool(re.match(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s]', full_line))
         
-        # Nhận diện thông minh: Hỗ trợ cả tự động đánh số của Word lẫn gõ tay chữ Câu X
         is_question = False
         if not is_sec_header(full_line) and not is_sol_header(full_line) and not is_opt_line:
             if is_explicit_q:
@@ -442,10 +436,11 @@ def doc_de_goc(file_stream):
                 current_item = {"q_elems": [p._element], "sub_options": []}
             elif current_item and not in_solution:
                 if is_opt_line:
+                    clean_sub_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', full_line).strip()
                     is_under = Kiem_Tra_Gach_Chan(p)
                     current_item["sub_options"].append({
                         "elem": p._element,
-                        "text": "",
+                        "text": clean_sub_text,
                         "is_correct": "Đúng" if is_under else "Sai"
                     })
                 elif len(current_item["sub_options"]) == 0:
@@ -457,10 +452,9 @@ def doc_de_goc(file_stream):
                 current_item = {"q_elems": [p._element], "correct": ""}
             elif current_item:
                 if is_sol_header(full_line):
-                    if re.search(r'(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA)\b', full_line, re.IGNORECASE):
-                        ans_val = re.sub(r'^.*?(?:Đáp\s*(?:số|án)|Đ[SÁA]|DS|DA)\s*[\:\-\.]*\s*', '', full_line, flags=re.IGNORECASE).strip()
-                        if ans_val:
-                            current_item["correct"] = ans_val
+                    m_ans = re.search(r'(?:Đáp\s*(?:số|án)|Lời\s*giải|HDG|Hướng\s*dẫn\s*giải|Giải|Đ[SÁA]|DS|DA)\s*[\:\-\.]*\s*(.*)$', full_line, re.IGNORECASE)
+                    if m_ans and m_ans.group(1).strip():
+                        current_item["correct"] = m_ans.group(1).strip()
                 elif in_solution:
                     if not current_item["correct"] and full_line.strip() and not full_line.lower().startswith("lời giải"):
                         current_item["correct"] = full_line.strip()
@@ -474,16 +468,16 @@ def doc_de_goc(file_stream):
 
     return doc, phan1, phan2, phan3
 
-# 7. GIAO DIỆN STREAMLIT & XỬ LÝ TRỘN ĐỀ
+# 7. THIẾT LẬP THÔNG TIN
 with st.expander("⚙️ **THÔNG TIN TIÊU ĐỀ ĐỀ KIỂM TRA & CÁC MÃ ĐỀ**", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
         so_gd = st.text_input("Sở Giáo dục & Đào tạo", value="SỞ GIÁO DỤC VÀ ĐÀO TẠO TP.HCM")
         ten_truong = st.text_input("Tên Trường", value="TRƯỜNG THPT THỦ ĐỨC")
-        ten_ky_thi = st.text_input("Tên Kỳ Thi", value="KIỂM TRA ĐỊNH KÌ GIỮA HỌC KÌ I")
+        ten_ky_thi = st.text_input("Tên Kỳ Thi", value="KIỂM TRA ĐỊNH KÌ HỌC KÌ I")
     with col2:
         mon_thi = st.text_input("Môn thi / Khối", value="MÔN VẬT LÍ - KHỐI 12")
-        thoi_gian = st.text_input("Thời gian làm bài", value="45 phút")
+        thoi_gian = st.text_input("Thời gian làm bài", value="50 phút")
         ds_ma_de_input = st.text_input("Danh sách Mã Đề (cách nhau bởi dấu phẩy)", value="1021, 1022, 1023, 1024")
 
 uploaded_file = st.file_uploader("Bước 1: Tải lên file Word đề gốc (.docx)", type=["docx"])
@@ -491,7 +485,7 @@ uploaded_file = st.file_uploader("Bước 1: Tải lên file Word đề gốc (.
 if uploaded_file is not None:
     st.success(f"✅ Đã nhận file: **{uploaded_file.name}**")
 
-if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type="primary"):
+if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án", type="primary"):
     if uploaded_file is None:
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
@@ -518,6 +512,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         rid_map = {}
                         ma_de_answers[ma_de] = {'p1': [], 'p2': [], 'p3': []}
                         
+                        # CẤU HÌNH TRANG A4 VÀ LỀ TRANG
                         sec = doc.sections[0]
                         sec.page_width = Cm(21.0)
                         sec.page_height = Cm(29.7)
@@ -526,6 +521,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         sec.left_margin = Cm(2.0)
                         sec.right_margin = Cm(1.5)
                         
+                        # 1. TIÊU ĐỀ HEADERS
                         table = doc.add_table(rows=1, cols=2)
                         table.alignment = WD_TABLE_ALIGNMENT.CENTER
                         table.autofit = False
@@ -565,6 +561,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         r_note = p_r.add_run(f"Đề có {note_str}")
                         r_note.font.name = 'Times New Roman'; r_note.font.size = Pt(9.5); r_note.italic = True
                         
+                        # 2. ĐỊNH DẠNG HỌ TÊN, SỐ BÁO BÁO DẠNH, MÃ ĐỀ
                         p_name = doc.add_paragraph()
                         p_name.paragraph_format.space_before = Pt(8)
                         p_name.paragraph_format.space_after = Pt(2)
@@ -591,7 +588,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         nhan_p1_excel = ["A", "B", "C", "D"]
                         nhan_p2_word = ["a)", "b)", "c)", "d)"]
 
-                        # TRỘN PHẦN I
+                        # 3. TRỘN PHẦN I
                         if phan1_goc:
                             p_head1 = doc.add_paragraph()
                             Set_Paragraph_Justify_And_Zero_Indent(p_head1)
@@ -628,7 +625,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                                 Render_Phuong_An_Phan_1(doc, doc_goc_obj, rid_map, opts, nhan_p1_word)
                                 ma_de_answers[ma_de]['p1'].append(correct_label)
 
-                        # TRỘN PHẦN II
+                        # 4. TRỘN PHẦN II
                         if phan2_goc:
                             p_head2 = doc.add_paragraph()
                             Set_Paragraph_Justify_And_Zero_Indent(p_head2)
@@ -664,7 +661,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                                     
                                 ma_de_answers[ma_de]['p2'].append("".join(ans_chars))
 
-                        # TRỘN PHẦN III
+                        # 5. TRỘN PHẦN III
                         if phan3_goc:
                             p_head3 = doc.add_paragraph()
                             Set_Paragraph_Justify_And_Zero_Indent(p_head3)
@@ -689,7 +686,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                                     
                                 ma_de_answers[ma_de]['p3'].append(str(q["correct"]).strip())
 
-                        # FOOTER CHÂN TRANG
+                        # 6. LỜI DẶN CHÂN TRANG (CĂN GIỮA & IN ĐẬM ---HẾT---)
                         p_foot1 = doc.add_paragraph()
                         p_foot1.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         p_foot1.paragraph_format.space_before = Pt(12)
@@ -708,11 +705,12 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         doc.save(doc_io)
                         zip_file.writestr(f"{ma_de}.docx", doc_io.getvalue())
                     
-                    # XUẤT FILE EXCEL ĐÁP ÁN MA TRẬN
+                    # --- XUẤT FILE EXCEL ĐÁP ÁN MATRẬN ĐỒNG BỘ 100% THEO FILE MẪU DAP AN ---
                     wb_excel = openpyxl.Workbook()
                     ws_excel = wb_excel.active
                     ws_excel.title = "Sheet1"
 
+                    # Dòng 1: Tiêu đề Cột
                     header = ['Câu']
                     for m in danh_sach_ma_de:
                         header.append(int(m) if str(m).isdigit() else str(m))
@@ -723,18 +721,21 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                     num_p2 = len(ma_de_answers[first_md]['p2'])
                     num_p3 = len(ma_de_answers[first_md]['p3'])
 
+                    # Dòng Phần I (1 đến N câu)
                     for i in range(num_p1):
                         row = [i + 1]
                         for md in danh_sach_ma_de:
                             row.append(ma_de_answers[md]['p1'][i])
                         ws_excel.append(row)
 
+                    # Dòng Phần II (Gộp 4 ý thành 1 ô chuỗi 4 ký tự: ĐSĐS...)
                     for i in range(num_p2):
                         row = [i + 1]
                         for md in danh_sach_ma_de:
                             row.append(ma_de_answers[md]['p2'][i])
                         ws_excel.append(row)
 
+                    # Dòng Phần III (Định dạng số nguyên là int, số thập phân là string General)
                     for i in range(num_p3):
                         row = [i + 1]
                         for md in danh_sach_ma_de:
@@ -744,6 +745,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                             row.append(val)
                         ws_excel.append(row)
 
+                    # Định dạng hiển thị chuẩn mực theo file DAP AN_K10TN.xlsx
                     align_center = Alignment(horizontal='center', vertical='center')
                     font_header = Font(name='Calibri', size=11, bold=True)
                     font_cell = Font(name='Calibri', size=11, bold=False)
@@ -763,7 +765,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                     wb_excel.save(excel_io)
                     zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công! Đã tự động nhận diện chính xác 100% câu hỏi môn Vật lí & Hóa học!")
+                st.success("🎉 Trộn đề thành công!")
                 st.download_button(
                     label="📥 TẢI XUẤT TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
