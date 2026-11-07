@@ -25,13 +25,13 @@ st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc c�
 
 st.divider()
 
-# CONFIG ĐƯỜNG DẪN FILE MẪU & LINK LƯU TRỮ ĐÁM MÂY (CLOUD STORAGE)
+# CONFIG ĐƯỜNG DẪN FILE MẪU & LINK LƯU TRỮ ĐÁM MÂY (GOOGLE DRIVE CLOUD STORAGE)
 FILE_MAU_TEN = "TX_B9_MIX.docx"  # Đặt file TX_B9_MIX.docx cùng thư mục với main.py
-CLOUD_STORAGE_URL = "https://docs.google.com/document/d/1kNN3qXByIqA3pE9rBpat0JfY6v5iBGWi/edit?usp=sharing&ouid=109853281143982423134&rtpof=true&sd=true"  # Điền link Cloud Storage (ví dụ: Google Drive direct link, GitHub Raw) nếu lưu trữ trực tuyến
+CLOUD_STORAGE_URL = "https://docs.google.com/document/d/1kNN3qXByIqA3pE9rBpat0JfY6v5iBGWi/edit?usp=sharing&ouid=109853281143982423134&rtpof=true&sd=true"
 
 @st.cache_data
 def load_file_mau_bytes():
-    """Tải nội dung binary của file đề mẫu TX_B9_MIX.docx từ cục bộ hoặc Cloud Storage"""
+    """Tải nội dung binary của file đề mẫu TX_B9_MIX.docx từ cục bộ hoặc từ Google Drive Cloud Storage"""
     # 1. Ưu tiên đọc trực tiếp từ thư mục dự án
     if os.path.exists(FILE_MAU_TEN):
         try:
@@ -40,10 +40,17 @@ def load_file_mau_bytes():
         except Exception:
             pass
             
-    # 2. Đọc từ đường dẫn đám mây (Cloud Storage) nếu có khai báo CLOUD_STORAGE_URL
+    # 2. Đọc từ đường dẫn Google Drive Cloud Storage nếu có khai báo CLOUD_STORAGE_URL
     if CLOUD_STORAGE_URL and CLOUD_STORAGE_URL.startswith("http"):
         try:
-            req = urllib.request.Request(CLOUD_STORAGE_URL, headers={'User-Agent': 'Mozilla/5.0'})
+            download_url = CLOUD_STORAGE_URL
+            # Tự động chuyển link Google Docs view/edit thành link xuất file .docx trực tiếp
+            match = re.search(r'google\.com/document/d/([^/]+)', CLOUD_STORAGE_URL)
+            if match:
+                doc_id = match.group(1)
+                download_url = f"https://docs.google.com/document/d/{doc_id}/export?format=docx"
+
+            req = urllib.request.Request(download_url, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req) as response:
                 return response.read()
         except Exception:
@@ -55,7 +62,7 @@ def load_file_mau_bytes():
 with st.container():
     col_mau1, col_mau2 = st.columns([1.8, 1], vertical_alignment="center")
     with col_mau1:
-        st.markdown(f"📄 **File đề mẫu chuẩn:** Tải file **`{FILE_MAU_TEN}`** để xem định dạng:")
+        st.markdown(f"📄 **File đề mẫu chuẩn:** Tải file **`{FILE_MAU_TEN}`** để xem định dạng mẫu")
     with col_mau2:
         file_mau_data = load_file_mau_bytes()
         if file_mau_data:
