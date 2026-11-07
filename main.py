@@ -15,16 +15,16 @@ import openpyxl
 from openpyxl.styles import Alignment, Font
 import pandas as pd
 
-# 1. CẤU HÌNH TRANG WEB STREAMLIT
-st.set_page_config(page_title="Phần mềm Trộn Đề Vật Lí Chuyên Nghiệp", page_icon="📝", layout="centered")
+# 1. CẤU HÌNH TRANG WEB
+st.set_page_config(page_title="Phần mềm Trộn Đề Kiểm tra môn Vật Lí", page_icon="📝", layout="centered")
 
-st.title("📝 Ứng Dụng Trộn Đề Vật Lí Online")
-st.caption("👨‍🏫 **Tác giả:** LQChau - CLB STEM - THPT Thủ Đức")
-st.write("Hệ thống trộn đề thi chuẩn cấu trúc Bộ GD&ĐT, bảo toàn công thức MathType, Equation, Hình ảnh & xuất file Excel đáp án ma trận chuẩn mẫu 100%.")
+st.title("📝 Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí Online")
+st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT")
 
 st.divider()
 
-# 2. HÀM KHÓA CỨNG FONT TIMES NEW ROMAN 12PT Ở CẤP ĐỘ MÁY CHỦ
+# 2. FONT TIMES NEW ROMAN 12PT
 def Thiet_Lap_Font_Times_New_Roman(doc):
     style = doc.styles['Normal']
     font = style.font
@@ -50,7 +50,7 @@ def Kiem_Tra_Gach_Chan(paragraph):
                 return True
     return False
 
-# 3. HÀM CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (GÁN CHẶT TIMES NEW ROMAN 12PT)
+# 3. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (FONT TIMES NEW ROMAN 12PT)
 def Cap_Nhat_Tien_To_Cau(p_elem, new_prefix):
     doc_temp = Document()
     append_elem(doc_temp, copy.deepcopy(p_elem))
@@ -107,7 +107,7 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, new_prefix):
     p._element.insert(0, r0._element)
     return p._element
 
-# 4. HÀM DÀN HÀNG ĐÁP ÁN PHẦN I BẰNG TAB TỰ ĐỘNG
+# 4. DÀN HÀNG ĐÁP ÁN PHẦN I
 def Render_Phuong_An_Phan_1(doc, opts, nhan_p1):
     total_len = sum(len(opt["text"]) for opt in opts)
     max_len = max(len(opt["text"]) for opt in opts) if opts else 0
@@ -170,7 +170,7 @@ def Render_Phuong_An_Phan_1(doc, opts, nhan_p1):
             elem = Lay_Noi_Dung_Phuong_An_Clean(copy.deepcopy(opt["elem"]), prefix)
             append_elem(doc, elem)
 
-# 5. HÀM ĐỌC ĐỀ GỐC CẢI TIẾN BỘ LỌC ĐÁP ÁN PHẦN III
+# 5. XÁC ĐỊNH ĐÁP ÁN PHẦN III
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1, phan2, phan3 = [], [], []
@@ -251,8 +251,8 @@ def doc_de_goc(file_stream):
 
     return phan1, phan2, phan3
 
-# 6. KHU VỰC THIẾT LẬP THÔNG TIN (UI STREAMLIT)
-with st.expander("⚙️ **CẤU HÌNH THÔNG TIN TIÊU ĐỀ ĐỀ THI & MÃ ĐỀ**", expanded=True):
+# 6. THIẾT LẬP THÔNG TIN (UI STREAMLIT)
+with st.expander("⚙️ **THÔNG TIN TIÊU ĐỀ ĐỀ KIỂM TRA & CÁC MÃ ĐỀ**", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
         so_gd = st.text_input("Sở Giáo dục & Đào tạo", value="SỞ GIÁO DỤC VÀ ĐÀO TẠO TP.HCM")
