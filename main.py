@@ -6,11 +6,10 @@ import zipfile
 import io
 import copy
 from docx import Document
-from docx.shared import Pt, Inches, RGBColor
+from docx.shared import Pt, Cm, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
-from docx.oxml import parse_xml, OxmlElement
 import pandas as pd
 
 # 1. CẤU HÌNH TRANG WEB STREAMLIT
@@ -18,11 +17,11 @@ st.set_page_config(page_title="Phần mềm Trộn Đề Vật Lí Chuyên Nghi�
 
 st.title("📝 Ứng Dụng Trộn Đề Vật Lí Online")
 st.caption("👨‍🏫 **Tác giả:** LQChau - CLB STEM - THPT Thủ Đức")
-st.write("Hệ thống trộn đề thi chuẩn cấu trúc Bộ GD&ĐT, bảo toàn công thức MathType, Equation, Hình ảnh & Bảng biểu.")
+st.write("Hệ thống trộn đề thi chuẩn cấu trúc Bộ GD&ĐT, bảo toàn định dạng font/size gốc, công thức MathType, Equation, Hình ảnh & Bảng.")
 
 st.divider()
 
-# 2. HÀM TRỢ GIÚP XỬ LÝ XML WORD
+# 2. HÀM CHÈN KHỐI XML WORD
 def append_elem(doc, elem):
     body = doc._element.body
     sectPr = body.find(qn('w:sectPr'))
@@ -38,11 +37,20 @@ def Kiem_Tra_Gach_Chan(paragraph):
                 return True
     return False
 
+# 3. HÀM CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (KẾ THỪA FONT CHỮ/SIZE GỐC)
 def Cap_Nhat_Tien_To_Cau(p_elem, new_prefix):
     doc_temp = Document()
     append_elem(doc_temp, copy.deepcopy(p_elem))
     p = doc_temp.paragraphs[0]
     
+    # Lấy thông tin font chữ & font size từ run đầu tiên có văn bản
+    font_name, font_size = None, None
+    for r in p.runs:
+        if r.text and r.text.strip():
+            font_name = r.font.name
+            font_size = r.font.size
+            break
+            
     full_text = p.text
     match = re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]*', full_text, re.IGNORECASE)
     if match:
@@ -61,6 +69,8 @@ def Cap_Nhat_Tien_To_Cau(p_elem, new_prefix):
                 
     r0 = p.add_run(new_prefix)
     r0.bold = True
+    if font_name: r0.font.name = font_name
+    if font_size: r0.font.size = font_size
     p._element.insert(0, r0._element)
     return p._element
 
@@ -69,6 +79,13 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, new_prefix):
     append_elem(doc_temp, copy.deepcopy(p_elem))
     p = doc_temp.paragraphs[0]
     
+    font_name, font_size = None, None
+    for r in p.runs:
+        if r.text and r.text.strip():
+            font_name = r.font.name
+            font_size = r.font.size
+            break
+            
     full_text = p.text
     match = re.match(r'^[A-Da-d][\.\:\-\)\s]*', full_text)
     if match:
@@ -87,22 +104,23 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, new_prefix):
                 
     r0 = p.add_run(new_prefix)
     r0.bold = True
+    if font_name: r0.font.name = font_name
+    if font_size: r0.font.size = font_size
     p._element.insert(0, r0._element)
     return p._element
 
-# 3. HÀM GỘP VÀ DÀN HÀNG ĐÁP ÁN PHẦN I BẰNG TAB
+# 4. HÀM DÀN HÀNG ĐÁP ÁN PHẦN I BẰNG TAB (TĂNG TÍNH THẨM MỸ)
 def Render_Phuong_An_Phan_1(doc, opts, nhan_p1):
-    # Tính tổng độ dài văn bản của 4 phương án
     total_len = sum(len(opt["text"]) for opt in opts)
     max_len = max(len(opt["text"]) for opt in opts) if opts else 0
     
-    # Kịch bản 1: Cả 4 đáp án trên 1 dòng (nếu ngắn)
+    # Kịch bản 1: 4 phương án trên 1 dòng (nếu ngắn)
     if total_len < 45 and max_len < 15:
         p_combined = Document().add_paragraph()
         p_format = p_combined.paragraph_format
-        p_format.tab_stops.add_tab_stop(Inches(1.75))
-        p_format.tab_stops.add_tab_stop(Inches(3.5))
-        p_format.tab_stops.add_tab_stop(Inches(5.25))
+        p_format.tab_stops.add_tab_stop(Cm(4.3))
+        p_format.tab_stops.add_tab_stop(Cm(8.7))
+        p_format.tab_stops.add_tab_stop(Cm(13.1))
         
         for idx, opt in enumerate(opts):
             prefix = f"{nhan_p1[idx]} "
@@ -112,15 +130,14 @@ def Render_Phuong_An_Phan_1(doc, opts, nhan_p1):
             for child in doc_tmp.paragraphs[0]._element:
                 p_combined._element.append(copy.deepcopy(child))
             if idx < 3:
-                r_tab = p_combined.add_run("\t")
+                p_combined.add_run("\t")
                 
         append_elem(doc, p_combined._element)
         
-    # Kịch bản 2: 2 đáp án / dòng (2 dòng)
+    # Kịch bản 2: 2 phương án / 1 dòng
     elif total_len < 90 and max_len < 30:
-        # Dòng 1: A & B
         p_line1 = Document().add_paragraph()
-        p_line1.paragraph_format.tab_stops.add_tab_stop(Inches(3.5))
+        p_line1.paragraph_format.tab_stops.add_tab_stop(Cm(8.7))
         for idx in [0, 1]:
             prefix = f"{nhan_p1[idx]} "
             elem = Lay_Noi_Dung_Phuong_An_Clean(copy.deepcopy(opts[idx]["elem"]), prefix)
@@ -132,9 +149,8 @@ def Render_Phuong_An_Phan_1(doc, opts, nhan_p1):
                 p_line1.add_run("\t")
         append_elem(doc, p_line1._element)
         
-        # Dòng 2: C & D
         p_line2 = Document().add_paragraph()
-        p_line2.paragraph_format.tab_stops.add_tab_stop(Inches(3.5))
+        p_line2.paragraph_format.tab_stops.add_tab_stop(Cm(8.7))
         for idx in [2, 3]:
             prefix = f"{nhan_p1[idx]} "
             elem = Lay_Noi_Dung_Phuong_An_Clean(copy.deepcopy(opts[idx]["elem"]), prefix)
@@ -146,14 +162,14 @@ def Render_Phuong_An_Phan_1(doc, opts, nhan_p1):
                 p_line2.add_run("\t")
         append_elem(doc, p_line2._element)
         
-    # Kịch bản 3: Mỗi đáp án 1 dòng (4 dòng)
+    # Kịch bản 3: Mỗi phương án 1 dòng
     else:
         for idx, opt in enumerate(opts):
             prefix = f"{nhan_p1[idx]} "
             elem = Lay_Noi_Dung_Phuong_An_Clean(copy.deepcopy(opt["elem"]), prefix)
             append_elem(doc, elem)
 
-# 4. HÀM ĐỌC ĐỀ GỐC
+# 5. HÀM ĐỌC VÀ PHÂN TÍCH ĐỀ GỐC
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1, phan2, phan3 = [], [], []
@@ -231,7 +247,7 @@ def doc_de_goc(file_stream):
 
     return phan1, phan2, phan3
 
-# 5. KHU VỰC ĐIỀN THÔNG TIN BÀI KIỂM TRA (UI STREAMLIT)
+# 6. KHU VỰC THIẾT LẬP THÔNG TIN (UI STREAMLIT)
 with st.expander("⚙️ **CẤU HÌNH THÔNG TIN TIÊU ĐỀ ĐỀ THI & MÃ ĐỀ**", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
@@ -252,10 +268,9 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
     if uploaded_file is None:
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
-        with st.spinner("Đang khởi tạo các mã đề thi chuẩn chuyên nghiệp..."):
+        with st.spinner("Đang khởi tạo mã đề thi chuẩn A4 chuyên nghiệp..."):
             phan1_goc, phan2_goc, phan3_goc = doc_de_goc(uploaded_file)
             
-            # Xử lý danh sách mã đề từ ô nhập
             danh_sach_ma_de = [m.strip() for m in ds_ma_de_input.split(",") if m.strip()]
             if not danh_sach_ma_de:
                 danh_sach_ma_de = ["2101", "2102", "2103", "2104"]
@@ -273,14 +288,23 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                     for ma_de in danh_sach_ma_de:
                         doc = Document()
                         
+                        # --- THIẾT LẬP BỐ CỤC TRANG A4 VÀ LỀ TRANG CHUẨN ---
+                        sec = doc.sections[0]
+                        sec.page_width = Cm(21.0)
+                        sec.page_height = Cm(29.7)
+                        sec.top_margin = Cm(1.5)
+                        sec.bottom_margin = Cm(1.5)
+                        sec.left_margin = Cm(2.0)
+                        sec.right_margin = Cm(1.5)
+                        
                         # --- 1. TẠO BẢNG TIÊU ĐỀ HEADERS (2 CỘT CHUẨN BỘ) ---
                         table = doc.add_table(rows=1, cols=2)
                         table.alignment = WD_TABLE_ALIGNMENT.CENTER
                         table.autofit = False
                         
                         cell_left, cell_right = table.rows[0].cells
-                        cell_left.width = Inches(3.2)
-                        cell_right.width = Inches(3.3)
+                        cell_left.width = Cm(8.5)
+                        cell_right.width = Cm(9.0)
                         
                         # Cột trái (Sở & Trường)
                         p_l = cell_left.paragraphs[0]
@@ -291,7 +315,14 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         r_truong.bold = True
                         r_truong.font.size = Pt(10.5)
                         
-                        # Cột phải (Kỳ thi, môn, thời gian, số câu)
+                        # Tạo chuỗi ghi chú số câu động thực tế
+                        sec_notes = []
+                        if len(phan1_goc) > 0: sec_notes.append(f"{len(phan1_goc)} TN")
+                        if len(phan2_goc) > 0: sec_notes.append(f"{len(phan2_goc)} ĐS")
+                        if len(phan3_goc) > 0: sec_notes.append(f"{len(phan3_goc)} TL Ngắn")
+                        note_str = f"({', '.join(sec_notes)})" if sec_notes else ""
+                        
+                        # Cột phải (Kỳ thi, môn, thời gian, số câu thực tế)
                         p_r = cell_right.paragraphs[0]
                         p_r.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         r_kt = p_r.add_run(f"{ten_ky_thi.upper()}\n")
@@ -306,7 +337,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         r_tg.font.size = Pt(9.5)
                         r_tg.italic = True
                         
-                        r_note = p_r.add_run(f"(Đề có {len(phan1_goc)} TN, {len(phan2_goc)} ĐS, {len(phan3_goc)} TL Ngắn)")
+                        r_note = p_r.add_run(f"Đề có {note_str}")
                         r_note.font.size = Pt(9)
                         r_note.italic = True
                         
@@ -314,8 +345,8 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                         p_info = doc.add_paragraph()
                         p_info.paragraph_format.space_before = Pt(8)
                         p_info.paragraph_format.space_after = Pt(12)
-                        p_info.paragraph_format.tab_stops.add_tab_stop(Inches(4.2))
-                        p_info.paragraph_format.tab_stops.add_tab_stop(Inches(5.5))
+                        p_info.paragraph_format.tab_stops.add_tab_stop(Cm(11.5))
+                        p_info.paragraph_format.tab_stops.add_tab_stop(Cm(15.0))
                         
                         r_info = p_info.add_run("Họ tên học sinh: .....................................\tSố báo danh: ............................\tMã đề: ")
                         r_info.font.size = Pt(10.5)
@@ -376,59 +407,5 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                                 subs = q["sub_options"]
                                 random.shuffle(subs)
                                 for s_idx, sub in enumerate(subs):
-                                    prefix = f"\t{nhan_p2[s_idx]}  "
-                                    elem = Lay_Noi_Dung_Phuong_An_Clean(copy.deepcopy(sub["elem"]), prefix)
-                                    append_elem(doc, elem)
-                                    
-                                    danh_sach_excel_data.append({
-                                        "Mã Đề": ma_de, "Phần": "Phần II", "Câu Số": f"Câu {idx + 1} ý {nhan_p2[s_idx]}", "Đáp Án Đúng": sub["is_correct"]
-                                    })
-
-                        # --- 4. TRỘN PHẦN III ---
-                        if phan3_goc:
-                            p_head3 = doc.add_paragraph()
-                            p_head3.paragraph_format.space_before = Pt(10)
-                            p_head3.paragraph_format.space_after = Pt(4)
-                            r_h3 = p_head3.add_run(f"PHẦN III. Thí sinh trả lời từ câu 1 đến câu {len(phan3_goc)}.")
-                            r_h3.bold = True
-                            r_h3.font.size = Pt(10.5)
-
-                            p3_shuffled = copy.deepcopy(phan3_goc)
-                            random.shuffle(p3_shuffled)
-                            for idx, q in enumerate(p3_shuffled):
-                                updated_q = Cap_Nhat_Tien_To_Cau(q["q_elem"], f"Câu {idx + 1}: ")
-                                append_elem(doc, updated_q)
-                                
-                                danh_sach_excel_data.append({
-                                    "Mã Đề": ma_de, "Phần": "Phần III", "Câu Số": idx + 1, "Đáp Án Đúng": q["correct"]
-                                })
-
-                        # --- 5. LỜI DẶN CHÂN TRANG ---
-                        p_foot1 = doc.add_paragraph("---Hết---")
-                        p_foot1.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                        p_foot1.paragraph_format.space_before = Pt(12)
-                        
-                        p_foot2 = doc.add_paragraph("Thí Sinh Không Được Sử Dụng Tài Liệu - Cán Bộ Coi Thi Không Giải Thích Gì Thêm.")
-                        p_foot2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                        p_foot2.runs[0].font.size = Pt(9.5)
-                        p_foot2.runs[0].italic = True
-
-                        doc_io = io.BytesIO()
-                        doc.save(doc_io)
-                        zip_file.writestr(f"{ma_de}.docx", doc_io.getvalue())
-                    
-                    # --- XUẤT FILE EXCEL ĐÁP ÁN TỔNG HỢP ---
-                    df = pd.DataFrame(danh_sach_excel_data)
-                    excel_io = io.BytesIO()
-                    with pd.ExcelWriter(excel_io, engine='openpyxl') as writer:
-                        df.to_excel(writer, index=False, sheet_name="Dap_An_Tong_Hop")
-                    zip_file.writestr("Bang_Dap_An_Cac_Ma_De.xlsx", excel_io.getvalue())
-
-                st.success("🎉 Trộn đề hoàn tất! Các mã đề được định dạng chuyên nghiệp chuẩn 100% Bộ GD&ĐT.")
-                st.download_button(
-                    label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
-                    data=zip_buffer.getvalue(),
-                    file_name="Bo_De_Thi_Chuyen_Nghiep.zip",
-                    mime="application/zip",
-                    type="primary"
-                )
+                                    # Thẳng lề trái, không dùng tab
+                                    prefix = f"{nhan_p2[s_idx]}
