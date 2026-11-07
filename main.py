@@ -126,7 +126,7 @@ def Has_Auto_Numbering(p):
         return True
     return False
 
-# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN
+# 3. HÀM TÁCH CÁC PHƯƠNG ÁN NẰM CÙNG DÒNG VĂN BẢN (ĐÃ TỐI ƯU LINH HOẠT VỚI KHOẢNG TRẮNG THỤT LỀ)
 def split_paragraph_options(p_elem):
     children = [child for child in p_elem if not child.tag.endswith('}pPr')]
     if not children:
@@ -153,7 +153,7 @@ def split_paragraph_options(p_elem):
         clean_text = re.sub(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)\s\xa0]*', '', full_text).strip()
         return [{"elem": p_elem, "text": clean_text, "is_under": False}]
 
-    # Lọc danh sách khớp để đảm bảo nhãn xuất hiện đúng thứ tự A -> B -> C -> D hoặc a -> b -> c -> d
+    # Lọc danh sách khớp: chấp nhận nhãn đầu tiên nếu phía trước chỉ là khoảng trắng/tab
     valid_matches = []
     expected_char_codes = None
     
@@ -162,7 +162,8 @@ def split_paragraph_options(p_elem):
         lbl_code = ord(lbl.upper())
         
         if not valid_matches:
-            if m.start(1) <= 5: # Phương án đầu tiên phải nằm ở đầu đoạn văn
+            # Phương án đầu tiên: phía trước chỉ chứa khoảng trắng/tab (linh hoạt với mọi độ dài thụt lề)
+            if full_str[:m.start(1)].strip() == "":
                 valid_matches.append(m)
                 expected_char_codes = [lbl_code + 1]
         else:
