@@ -20,7 +20,7 @@ st.set_page_config(page_title="Phần mềm Trộn Đề Kiểm tra môn Vật L
 
 st.title("📝 Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí Online")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT (Bảo toàn 100% Hình ảnh, Đồ thị, Bảng biểu, MathType & Lọc bỏ Lời giải tự động).")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí chuẩn Bộ GD&ĐT (Hỗ trợ Đánh số tự động Word, Bảo toàn 100% Hình ảnh/MathType & Lọc bỏ Lời giải tự động).")
 
 st.divider()
 
@@ -78,6 +78,13 @@ def Kiem_Tra_Gach_Chan(paragraph):
                 return True
     return False
 
+def Has_Auto_Numbering(p):
+    """Kiểm tra xem đoạn văn có sử dụng tính năng Đánh số tự động (Bullets and Numbering) của Word hay không"""
+    pPr = p._element.pPr
+    if pPr is not None and pPr.numPr is not None:
+        return True
+    return False
+
 # 3. CẬP NHẬT TIỀN TỐ CÂU & PHƯƠNG ÁN (FONT TIMES NEW ROMAN 12PT)
 def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     elem_copied = Copy_Element_With_Media(p_elem, doc_src, doc_target, rid_map)
@@ -85,9 +92,14 @@ def Cap_Nhat_Tien_To_Cau(p_elem, doc_src, doc_target, rid_map, new_prefix):
     append_elem(doc_temp, elem_copied)
     p = doc_temp.paragraphs[0]
     
+    # Xóa tính năng auto numbering trên câu mới để không bị lặp lại số
+    pPr = p._element.pPr
+    if pPr is not None and pPr.numPr is not None:
+        pPr.remove(pPr.numPr)
+        
     full_text = p.text
-    match = re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]*', full_text, re.IGNORECASE)
-    if match:
+    match = re.match(r'^(Câu|Cau)?\s*\d+[\.\:\-\)\s]*', full_text, re.IGNORECASE)
+    if match and match.group(0).strip():
         prefix_len = len(match.group(0))
         remains = prefix_len
         for r in p.runs:
@@ -114,6 +126,10 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
     append_elem(doc_temp, elem_copied)
     p = doc_temp.paragraphs[0]
     
+    pPr = p._element.pPr
+    if pPr is not None and pPr.numPr is not None:
+        pPr.remove(pPr.numPr)
+        
     full_text = p.text
     match = re.match(r'^[A-Da-d][\.\:\-\)\s]*', full_text)
     if match:
@@ -200,7 +216,33 @@ def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
             elem = Lay_Noi_Dung_Phuong_An_Clean(opt["elem"], doc_src, doc, rid_map, prefix)
             append_elem(doc, elem)
 
-# 5. ĐỌC VÀ BẢO TOÀN TRỌN VẸN THÂN CÂU HỎI (BỎ TOÀN BỘ PHẦN LỜI GIẢI / ĐÁP ÁN KHỎI BÀI THI)
+# 5. TÁCH PHƯƠNG ÁN TRÊN CÙNG DÒNG (NẾU GIÁO VIÊN GÕ NHIỀU ĐÁP ÁN CÙNG DÒNG)
+def Tach_Phuong_An_Tren_Dong(p):
+    text = p.text.strip()
+    matches = list(re.finditer(r'(?:^|[\t\s]{2,}|(?<=\s))([A-Da-d])[\.\:\-\)\s]', text))
+    if len(matches) <= 1:
+        clean_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', text).strip()
+        is_under = Kiem_Tra_Gach_Chan(p)
+        return [{"elem": p._element, "text": clean_text, "is_under": is_under}]
+    else:
+        results = []
+        positions = [m.start(1) for m in matches]
+        for i in range(len(positions)):
+            start_pos = positions[i]
+            end_pos = positions[i+1] if i + 1 < len(positions) else len(text)
+            segment = text[start_pos:end_pos].strip()
+            clean_opt_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', segment).strip()
+            is_under = Kiem_Tra_Gach_Chan(p)
+            
+            doc_tmp = Document()
+            p_new = doc_tmp.add_paragraph()
+            r = p_new.add_run(segment)
+            r.font.name = 'Times New Roman'
+            r.font.size = Pt(12)
+            results.append({"elem": p_new._element, "text": clean_opt_text, "is_under": is_under})
+        return results
+
+# 6. ĐỌC VÀ BẢO TOÀN TRỌN VẸN THÂN CÂU HỎI (HỖ TRỢ ĐÁNH SỐ TỰ ĐỘNG & BỎ LỜI GIẢI)
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
     phan1, phan2, phan3 = [], [], []
@@ -212,6 +254,9 @@ def doc_de_goc(file_stream):
         pattern = r'^(?:Lời\s*giải|Hướng\s*dẫn\s*giải|HDG|Giải\s*chi\s*tiết|Đáp\s*án|Đáp\s*số|ĐS|ĐA|Giải)\b[\:\-\.\s]*'
         return bool(re.match(pattern, line, re.IGNORECASE))
 
+    def is_sec_header(line):
+        return bool(re.search(r'(?:\[?\s*PHAN[_\s]*[123]\s*\]?|PHẦN\s*(I|II|III|1|2|3)\b)', line, re.IGNORECASE))
+
     for p in doc.paragraphs:
         line = p.text.strip()
         has_drawing = ("drawing" in p._element.xml or "graphic" in p._element.xml or "pict" in p._element.xml)
@@ -219,6 +264,7 @@ def doc_de_goc(file_stream):
         if not line and not has_drawing:
             continue
 
+        # Kiểm tra tiêu đề các Phần
         if re.search(r'(?:\[?\s*PHAN[_\s]*3\s*\]?|PHẦN\s*(III|3)\b)', line, re.IGNORECASE):
             if current_item:
                 if current_section == 1: phan1.append(current_item)
@@ -247,7 +293,18 @@ def doc_de_goc(file_stream):
             in_solution = False
             continue
 
-        is_question = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', line, re.IGNORECASE))
+        # NHẬN BIẾT CÂU HỎI MỚI (BẰNG CHỮ THỦ CÔNG HOẶC ĐÁNH SỐ TỰ ĐỘNG WORD BULLETS & NUMBERING)
+        is_opt_line = bool(re.match(r'^[A-Da-d][\.\:\-\)\s]', line))
+        is_auto_num = Has_Auto_Numbering(p)
+        is_explicit_q = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', line, re.IGNORECASE)) or bool(re.match(r'^\d+[\.\:\-\)\s]', line))
+        
+        is_question = False
+        if not is_sec_header(line) and not is_sol_header(line):
+            if is_explicit_q:
+                is_question = True
+            elif is_auto_num and not is_opt_line:
+                is_question = True
+
         if is_question:
             in_solution = False
 
@@ -259,16 +316,16 @@ def doc_de_goc(file_stream):
                 if current_item: phan1.append(current_item)
                 current_item = {"q_elems": [p._element], "options": [], "correct_idx": None}
             elif current_item and not in_solution:
-                if re.match(r'^[A-Da-d][\.\:\-\)\s]', line):
-                    clean_opt_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', line).strip()
-                    is_under = Kiem_Tra_Gach_Chan(p)
-                    opt_idx = len(current_item["options"])
-                    current_item["options"].append({
-                        "elem": p._element,
-                        "text": clean_opt_text
-                    })
-                    if is_under:
-                        current_item["correct_idx"] = opt_idx
+                if is_opt_line:
+                    extracted_opts = Tach_Phuong_An_Tren_Dong(p)
+                    for opt in extracted_opts:
+                        opt_idx = len(current_item["options"])
+                        current_item["options"].append({
+                            "elem": opt["elem"],
+                            "text": opt["text"]
+                        })
+                        if opt["is_under"]:
+                            current_item["correct_idx"] = opt_idx
                 elif len(current_item["options"]) == 0:
                     current_item["q_elems"].append(p._element)
             elif current_item and in_solution:
@@ -283,7 +340,7 @@ def doc_de_goc(file_stream):
                 if current_item: phan2.append(current_item)
                 current_item = {"q_elems": [p._element], "sub_options": []}
             elif current_item and not in_solution:
-                if re.match(r'^[A-Da-d][\.\:\-\)\s]', line):
+                if is_opt_line:
                     clean_sub_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', line).strip()
                     is_under = Kiem_Tra_Gach_Chan(p)
                     current_item["sub_options"].append({
@@ -317,7 +374,7 @@ def doc_de_goc(file_stream):
 
     return doc, phan1, phan2, phan3
 
-# 6. KHU VỰC THIẾT LẬP THÔNG TIN (UI STREAMLIT)
+# 7. KHU VỰC THIẾT LẬP THÔNG TIN (UI STREAMLIT)
 with st.expander("⚙️ **THÔNG TIN TIÊU ĐỀ ĐỀ KIỂM TRA & CÁC MÃ ĐỀ**", expanded=True):
     col1, col2 = st.columns(2)
     with col1:
@@ -325,7 +382,7 @@ with st.expander("⚙️ **THÔNG TIN TIÊU ĐỀ ĐỀ KIỂM TRA & CÁC MÃ Đ
         ten_truong = st.text_input("Tên Trường", value="TRƯỜNG THPT THỦ ĐỨC")
         ten_ky_thi = st.text_input("Tên Kỳ Thi", value="KIỂM TRA ĐỊNH KÌ GIỮA HỌC KÌ I")
     with col2:
-        mon_thi = st.text_input("Môn thi / Khối", value="MÔN VẬT LÍ - KHỐI 10")
+        mon_thi = st.text_input("Môn thi / Khối", value="MÔN VẬT LÍ - KHỐI 12")
         thoi_gian = st.text_input("Thời gian làm bài", value="45 phút")
         ds_ma_de_input = st.text_input("Danh sách Mã Đề (cách nhau bởi dấu phẩy)", value="1021, 1022, 1023, 1024")
 
@@ -599,7 +656,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Sinh Đáp Án", type=
                     wb_excel.save(excel_io)
                     zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
 
-                st.success("🎉 Trộn đề thành công! Đã bảo toàn 100% hình ảnh & tự động loại bỏ Lời giải khỏi bài thi.")
+                st.success("🎉 Trộn đề thành công! Hệ thống đã tự động nhận diện cả Đánh số thủ công và Bullets & Numbering tự động của Word!")
                 st.download_button(
                     label="📥 TẢI XUỐNG TOÀN BỘ ĐỀ THI & FILE EXCEL ĐÁP ÁN (.ZIP)",
                     data=zip_buffer.getvalue(),
