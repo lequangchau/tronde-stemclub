@@ -21,7 +21,7 @@ st.set_page_config(page_title="Trộn Đề Kiểm tra môn Vật Lí", page_ico
 
 st.title("📝 Dự án CLB STEM: Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
-st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT (Hỗ trợ Câu hỏi chùm)")
+st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc của Bộ GD&ĐT (Hỗ trợ Câu hỏi chùm & Phần Tự luận)")
 
 st.divider()
 
@@ -32,7 +32,6 @@ CLOUD_STORAGE_URL = "https://docs.google.com/document/d/1kNN3qXByIqA3pE9rBpat0Jf
 @st.cache_data
 def load_file_mau_bytes():
     """Tải nội dung binary của file đề mẫu TX_B9_MIX.docx từ cục bộ hoặc từ Google Drive Cloud Storage"""
-    # 1. Ưu tiên đọc trực tiếp từ thư mục dự án
     if os.path.exists(FILE_MAU_TEN):
         try:
             with open(FILE_MAU_TEN, "rb") as f:
@@ -40,11 +39,9 @@ def load_file_mau_bytes():
         except Exception:
             pass
             
-    # 2. Đọc từ đường dẫn Google Drive Cloud Storage nếu có khai báo CLOUD_STORAGE_URL
     if CLOUD_STORAGE_URL and CLOUD_STORAGE_URL.startswith("http"):
         try:
             download_url = CLOUD_STORAGE_URL
-            # Tự động chuyển link Google Docs view/edit thành link xuất file .docx trực tiếp
             match = re.search(r'google\.com/document/d/([^/]+)', CLOUD_STORAGE_URL)
             if match:
                 doc_id = match.group(1)
@@ -58,11 +55,11 @@ def load_file_mau_bytes():
             
     return None
 
-# KHỐI GIAO DIỆN TẢI FILE MẪU CHUẨN (TX_B9_MIX.docx) - ĐÃ TỐI ƯU TỈ LỆ & CĂN GIỮA ĐỒNG BỘ
+# KHỐI GIAO DIỆN TẢI FILE MẪU CHUẨN (TX_B9_MIX.docx)
 with st.container():
     col_mau1, col_mau2 = st.columns([1.8, 1], vertical_alignment="center")
     with col_mau1:
-        st.markdown(f"📄 **File đề mẫu chuẩn:** Tải file **`{FILE_MAU_TEN}`** để xem định dạng")
+        st.markdown(f"📄 **File đề mẫu chuẩn:** Tải file **`{FILE_MAU_TEN}`** để xem định dạng mẫu")
     with col_mau2:
         file_mau_data = load_file_mau_bytes()
         if file_mau_data:
@@ -100,7 +97,7 @@ def get_node_text(node):
     return text
 
 def clean_mix_tags_from_elem(p_elem):
-    """Xóa triệt để các thẻ [MIX...], [MIX FIXED...], [END MIX...], [CHÙM...], [/CHÙM...] khỏi XML đoạn văn (kể cả khi bị Word tách nhỏ ra nhiều run)"""
+    """Xóa triệt để các thẻ [MIX...], [MIX FIXED...], [END MIX...], [CHÙM...], [/CHÙM...] khỏi XML đoạn văn"""
     pattern = re.compile(
         r'\[\/?\s*(?:END\s+MIX|ENDMIX|MIX(?:\s*FIXED|_FIXED)?|FIXED\s*MIX|FIXED_MIX|CHÙM(?:\s*FIXED|_FIXED)?|CHUM(?:\s*FIXED|_FIXED)?|CỤM(?:\s*FIXED|_FIXED)?|CUM(?:\s*FIXED|_FIXED)?)(?:[_\s]*\d+)?\s*\]',
         re.IGNORECASE
@@ -480,10 +477,77 @@ def Render_Cau_Dan_Chum(doc, start_q, end_q):
     r.bold = True
     r.italic = True
 
-# 6. ĐỌC VÀ XÁC ĐỊNH CẤU TRÚC ĐỀ GỐC (HỖ TRỢ CÁC THỂ MIX VÀ MIX FIXED)
+def Tao_Header_Trang_In(doc, so_gd, ten_truong, ten_ky_thi, mon_thi, thoi_gian, note_str, ma_de):
+    """Tạo bảng khung tiêu đề chuẩn cho file Word đề thi và file Word đáp án"""
+    sec = doc.sections[0]
+    sec.page_width = Cm(21.0)
+    sec.page_height = Cm(29.7)
+    sec.top_margin = Cm(1.5)
+    sec.bottom_margin = Cm(1.5)
+    sec.left_margin = Cm(2.0)
+    sec.right_margin = Cm(1.5)
+    
+    table = doc.add_table(rows=1, cols=2)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+    
+    cell_left, cell_right = table.rows[0].cells
+    cell_left.width = Cm(8.5)
+    cell_right.width = Cm(9.0)
+    
+    p_l = cell_left.paragraphs[0]
+    p_l.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_so = p_l.add_run(f"{so_gd.upper()}\n")
+    r_so.font.name = 'Times New Roman'; r_so.font.size = Pt(10)
+    
+    r_truong = p_l.add_run(f"{ten_truong.upper()}")
+    r_truong.bold = True
+    r_truong.font.name = 'Times New Roman'; r_truong.font.size = Pt(11)
+    
+    p_r = cell_right.paragraphs[0]
+    p_r.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_kt = p_r.add_run(f"{ten_ky_thi.upper()}\n")
+    r_kt.bold = True
+    r_kt.font.name = 'Times New Roman'; r_kt.font.size = Pt(11)
+    
+    r_mon = p_r.add_run(f"Môn thi: {mon_thi.upper()}\n")
+    r_mon.bold = True
+    r_mon.font.name = 'Times New Roman'; r_mon.font.size = Pt(10.5)
+    
+    r_tg = p_r.add_run(f"Thời gian: {thoi_gian}\n")
+    r_tg.font.name = 'Times New Roman'; r_tg.font.size = Pt(10); r_tg.italic = True
+    
+    if note_str:
+        r_note = p_r.add_run(f"Đề có {note_str}")
+        r_note.font.name = 'Times New Roman'; r_note.font.size = Pt(9.5); r_note.italic = True
+
+    if ma_de:
+        p_name = doc.add_paragraph()
+        p_name.paragraph_format.space_before = Pt(8)
+        p_name.paragraph_format.space_after = Pt(2)
+        r_name = p_name.add_run("Họ tên học sinh: ....................................................................................................")
+        r_name.font.name = 'Times New Roman'; r_name.font.size = Pt(12)
+
+        p_sbd = doc.add_paragraph()
+        p_sbd.paragraph_format.space_before = Pt(2)
+        p_sbd.paragraph_format.space_after = Pt(2)
+        r_sbd = p_sbd.add_run("Số báo danh: ........................................................................................................")
+        r_sbd.font.name = 'Times New Roman'; r_sbd.font.size = Pt(12)
+
+        p_made = doc.add_paragraph()
+        p_made.paragraph_format.space_before = Pt(2)
+        p_made.paragraph_format.space_after = Pt(10)
+        r_m1 = p_made.add_run("Mã đề: ")
+        r_m1.bold = True
+        r_m1.font.name = 'Times New Roman'; r_m1.font.size = Pt(12)
+        r_m2 = p_made.add_run(f"{ma_de}")
+        r_m2.bold = True
+        r_m2.font.name = 'Times New Roman'; r_m2.font.size = Pt(12)
+
+# 6. ĐỌC VÀ XÁC ĐỊNH CẤU TRÚC ĐỀ GỐC (PHẦN I, II, III, IV)
 def doc_de_goc(file_stream):
     doc = Document(file_stream)
-    phan1_blocks, phan2_blocks, phan3_blocks = [], [], []
+    phan1_blocks, phan2_blocks, phan3_blocks, phan4_blocks = [], [], [], []
     current_section = None
     current_item = None
     current_cluster = None
@@ -495,7 +559,7 @@ def doc_de_goc(file_stream):
         return bool(re.match(pattern, line, re.IGNORECASE))
 
     def is_sec_header(line):
-        return bool(re.search(r'(?:\[?\s*PHAN[_\s]*[123]\s*\]?|PHẦN\s*(I|II|III|1|2|3)\b)', line, re.IGNORECASE))
+        return bool(re.search(r'(?:\[?\s*PHAN[_\s]*[1234]\s*\]?|PHẦN\s*(I|II|III|IV|1|2|3|4)\b)', line, re.IGNORECASE))
 
     def is_mix_end(line):
         return bool(re.search(r'\[\/?\s*(?:END\s+MIX|ENDMIX|\/MIX|\/CHÙM|\/CHUM|\/CỤM|\/CUM)(?:[_\s]*\d+)?\s*\]', line, re.IGNORECASE))
@@ -507,7 +571,15 @@ def doc_de_goc(file_stream):
         nonlocal current_item, current_cluster, in_cluster, current_section
         if not current_item:
             return
-        target_blocks = phan1_blocks if current_section == 1 else (phan2_blocks if current_section == 2 else phan3_blocks)
+        if current_section == 1:
+            target_blocks = phan1_blocks
+        elif current_section == 2:
+            target_blocks = phan2_blocks
+        elif current_section == 3:
+            target_blocks = phan3_blocks
+        else:
+            target_blocks = phan4_blocks
+
         if in_cluster and current_cluster:
             current_cluster["items"].append(current_item)
         else:
@@ -518,21 +590,38 @@ def doc_de_goc(file_stream):
         nonlocal current_cluster, in_cluster, current_section
         flush_item_to_current_block()
         if in_cluster and current_cluster:
-            target_blocks = phan1_blocks if current_section == 1 else (phan2_blocks if current_section == 2 else phan3_blocks)
+            if current_section == 1:
+                target_blocks = phan1_blocks
+            elif current_section == 2:
+                target_blocks = phan2_blocks
+            elif current_section == 3:
+                target_blocks = phan3_blocks
+            else:
+                target_blocks = phan4_blocks
+
             if len(current_cluster["items"]) > 0:
                 target_blocks.append(current_cluster)
             current_cluster = None
             in_cluster = False
 
-    for p in doc.paragraphs:
-        full_line = get_node_text(p._element).strip()
-        has_drawing = ("drawing" in p._element.xml or "graphic" in p._element.xml or "pict" in p._element.xml or "oMath" in p._element.xml)
+    # Duyệt toàn bộ các khối phần tử (Đoạn văn & Bảng biểu) trong document
+    for elem in doc._element.body:
+        if elem.tag.endswith('sectPr'):
+            continue
+
+        full_line = get_node_text(elem).strip()
+        has_drawing = ("drawing" in elem.xml or "graphic" in elem.xml or "pict" in elem.xml or "oMath" in elem.xml)
         
         if not full_line and not has_drawing:
             continue
 
-        # Kiểm tra chuyển phần (Phần I, II, III)
-        if re.search(r'(?:\[?\s*PHAN[_\s]*3\s*\]?|PHẦN\s*(III|3)\b)', full_line, re.IGNORECASE):
+        # Kiểm tra chuyển phần (Phần IV, III, II, I)
+        if re.search(r'(?:\[?\s*PHAN[_\s]*4\s*\]?|PHẦN\s*(IV|4)\b)', full_line, re.IGNORECASE):
+            flush_cluster_to_blocks()
+            current_section = 4
+            in_solution = False
+            continue
+        elif re.search(r'(?:\[?\s*PHAN[_\s]*3\s*\]?|PHẦN\s*(III|3)\b)', full_line, re.IGNORECASE):
             flush_cluster_to_blocks()
             current_section = 3
             in_solution = False
@@ -569,7 +658,11 @@ def doc_de_goc(file_stream):
                 continue
 
         is_explicit_q = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', full_line, re.IGNORECASE)) or bool(re.match(r'^\d+[\.\:\-\)]', full_line))
-        is_auto_num = Has_Auto_Numbering(p)
+        
+        # Kiểm tra auto numbering đối với đoạn văn <w:p>
+        doc_tmp_p = Document()
+        append_elem(doc_tmp_p, elem)
+        is_auto_num = Has_Auto_Numbering(doc_tmp_p.paragraphs[0]) if len(doc_tmp_p.paragraphs) > 0 else False
         is_opt_line = bool(re.match(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)]', full_line))
         
         is_question = False
@@ -580,8 +673,8 @@ def doc_de_goc(file_stream):
                 if current_section in [1, 2]:
                     if current_item is None or len(current_item.get("options", [])) > 0 or len(current_item.get("sub_options", [])) > 0:
                         is_question = True
-                elif current_section == 3:
-                    if current_item is None or current_item.get("correct"):
+                elif current_section in [3, 4]:
+                    if current_item is None or len(current_item.get("sol_elems", [])) > 0 or current_item.get("correct"):
                         is_question = True
 
         if is_question:
@@ -594,10 +687,10 @@ def doc_de_goc(file_stream):
         # Đọc dữ liệu theo từng Phần
         if current_section == 1:
             if is_question:
-                current_item = {"q_elems": [p._element], "options": [], "correct_idx": None}
+                current_item = {"q_elems": [elem], "options": [], "correct_idx": None}
             elif current_item and not in_solution:
                 if is_opt_line:
-                    extracted_opts = split_paragraph_options(p._element)
+                    extracted_opts = split_paragraph_options(elem)
                     for opt in extracted_opts:
                         opt_idx = len(current_item["options"])
                         current_item["options"].append({
@@ -607,7 +700,7 @@ def doc_de_goc(file_stream):
                         if opt["is_under"]:
                             current_item["correct_idx"] = opt_idx
                 elif len(current_item["options"]) == 0:
-                    current_item["q_elems"].append(p._element)
+                    current_item["q_elems"].append(elem)
             elif current_item and in_solution:
                 if current_item["correct_idx"] is None:
                     m_ans = re.search(r'(?:Chọn|Đáp\s*án|ĐA)\s*([A-D])\b', full_line, re.IGNORECASE)
@@ -615,28 +708,28 @@ def doc_de_goc(file_stream):
                         ans_char = m_ans.group(1).upper()
                         current_item["correct_idx"] = ord(ans_char) - ord('A')
             elif current_item is None and in_cluster and current_cluster:
-                current_cluster["intro_elems"].append(p._element)
+                current_cluster["intro_elems"].append(elem)
 
         elif current_section == 2:
             if is_question:
-                current_item = {"q_elems": [p._element], "sub_options": []}
+                current_item = {"q_elems": [elem], "sub_options": []}
             elif current_item and not in_solution:
                 if is_opt_line:
                     clean_sub_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', full_line).strip()
-                    is_under = Kiem_Tra_Gach_Chan(p)
+                    is_under = Kiem_Tra_Gach_Chan(doc_tmp_p.paragraphs[0]) if len(doc_tmp_p.paragraphs) > 0 else False
                     current_item["sub_options"].append({
-                        "elem": p._element,
+                        "elem": elem,
                         "text": clean_sub_text,
                         "is_correct": "Đúng" if is_under else "Sai"
                     })
                 elif len(current_item["sub_options"]) == 0:
-                    current_item["q_elems"].append(p._element)
+                    current_item["q_elems"].append(elem)
             elif current_item is None and in_cluster and current_cluster:
-                current_cluster["intro_elems"].append(p._element)
+                current_cluster["intro_elems"].append(elem)
 
         elif current_section == 3:
             if is_question:
-                current_item = {"q_elems": [p._element], "correct": ""}
+                current_item = {"q_elems": [elem], "correct": ""}
             elif current_item:
                 if is_sol_header(full_line):
                     m_ans = re.search(r'(?:Đáp\s*(?:số|án)|Lời\s*giải|HDG|Hướng\s*dẫn\s*giải|Giải|Đ[SÁA]|DS|DA)\s*[\:\-\.]*\s*(.*)$', full_line, re.IGNORECASE)
@@ -646,12 +739,26 @@ def doc_de_goc(file_stream):
                     if not current_item["correct"] and full_line.strip() and not full_line.lower().startswith("lời giải"):
                         current_item["correct"] = full_line.strip()
                 elif not in_solution:
-                    current_item["q_elems"].append(p._element)
+                    current_item["q_elems"].append(elem)
             elif current_item is None and in_cluster and current_cluster:
-                current_cluster["intro_elems"].append(p._element)
+                current_cluster["intro_elems"].append(elem)
+
+        elif current_section == 4:
+            if is_question:
+                current_item = {"q_elems": [elem], "sol_elems": []}
+            elif current_item:
+                if is_sol_header(full_line):
+                    in_solution = True
+                    current_item["sol_elems"].append(elem)
+                elif in_solution:
+                    current_item["sol_elems"].append(elem)
+                else:
+                    current_item["q_elems"].append(elem)
+            elif current_item is None and in_cluster and current_cluster:
+                current_cluster["intro_elems"].append(elem)
 
     flush_cluster_to_blocks()
-    return doc, phan1_blocks, phan2_blocks, phan3_blocks
+    return doc, phan1_blocks, phan2_blocks, phan3_blocks, phan4_blocks
 
 # 7. THIẾT LẬP THÔNG TIN GIAO DIỆN STREAMLIT
 with st.expander("⚙️ **THÔNG TIN TIÊU ĐỀ ĐỀ KIỂM TRA & CÁC MÃ ĐỀ**", expanded=True):
@@ -674,8 +781,8 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
     if uploaded_file is None:
         st.warning("⚠️ Vui lòng chọn file Word đề gốc ở Bước 1 trước!")
     else:
-        with st.spinner("Đang khởi tạo mã đề thi và xuất file Excel đáp án..."):
-            doc_goc_obj, phan1_goc, phan2_goc, phan3_goc = doc_de_goc(uploaded_file)
+        with st.spinner("Đang khởi tạo mã đề thi và xuất file Excel / Word đáp án..."):
+            doc_goc_obj, phan1_goc, phan2_goc, phan3_goc, phan4_goc = doc_de_goc(uploaded_file)
             
             danh_sach_ma_de = [m.strip() for m in ds_ma_de_input.split(",") if m.strip()]
             if not danh_sach_ma_de:
@@ -684,12 +791,18 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
             num_p1_total = sum(len(b["items"]) if b.get("is_cluster") else 1 for b in phan1_goc)
             num_p2_total = sum(len(b["items"]) if b.get("is_cluster") else 1 for b in phan2_goc)
             num_p3_total = sum(len(b["items"]) if b.get("is_cluster") else 1 for b in phan3_goc)
+            num_p4_total = sum(len(b["items"]) if b.get("is_cluster") else 1 for b in phan4_goc)
             
-            tong_so_cau = num_p1_total + num_p2_total + num_p3_total
+            tong_so_cau = num_p1_total + num_p2_total + num_p3_total + num_p4_total
             if tong_so_cau == 0:
                 st.error("❌ **Không tìm thấy câu hỏi!** Vui lòng kiểm tra lại định dạng đề gốc.")
             else:
-                st.info(f"📊 Đã phân tích: **{num_p1_total}** câu Phần I | **{num_p2_total}** câu Phần II | **{num_p3_total}** câu Phần III")
+                sec_info_parts = []
+                if num_p1_total > 0: sec_info_parts.append(f"**{num_p1_total}** câu Phần I")
+                if num_p2_total > 0: sec_info_parts.append(f"**{num_p2_total}** câu Phần II")
+                if num_p3_total > 0: sec_info_parts.append(f"**{num_p3_total}** câu Phần III")
+                if num_p4_total > 0: sec_info_parts.append(f"**{num_p4_total}** câu Phần IV (Tự luận)")
+                st.info("📊 Đã phân tích: " + " | ".join(sec_info_parts))
                 
                 zip_buffer = io.BytesIO()
                 ma_de_answers = {}
@@ -699,79 +812,17 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         doc = Document()
                         Thiet_Lap_Font_Times_New_Roman(doc)
                         rid_map = {}
-                        ma_de_answers[ma_de] = {'p1': [], 'p2': [], 'p3': []}
-                        
-                        # CẤU HÌNH TRANG A4 VÀ LỀ TRANG
-                        sec = doc.sections[0]
-                        sec.page_width = Cm(21.0)
-                        sec.page_height = Cm(29.7)
-                        sec.top_margin = Cm(1.5)
-                        sec.bottom_margin = Cm(1.5)
-                        sec.left_margin = Cm(2.0)
-                        sec.right_margin = Cm(1.5)
-                        
-                        # 1. TIÊU ĐỀ HEADERS
-                        table = doc.add_table(rows=1, cols=2)
-                        table.alignment = WD_TABLE_ALIGNMENT.CENTER
-                        table.autofit = False
-                        
-                        cell_left, cell_right = table.rows[0].cells
-                        cell_left.width = Cm(8.5)
-                        cell_right.width = Cm(9.0)
-                        
-                        p_l = cell_left.paragraphs[0]
-                        p_l.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                        r_so = p_l.add_run(f"{so_gd.upper()}\n")
-                        r_so.font.name = 'Times New Roman'; r_so.font.size = Pt(10)
-                        
-                        r_truong = p_l.add_run(f"{ten_truong.upper()}")
-                        r_truong.bold = True
-                        r_truong.font.name = 'Times New Roman'; r_truong.font.size = Pt(11)
+                        ma_de_answers[ma_de] = {'p1': [], 'p2': [], 'p3': [], 'p4': []}
                         
                         sec_notes = []
                         if num_p1_total > 0: sec_notes.append(f"{num_p1_total} TN")
                         if num_p2_total > 0: sec_notes.append(f"{num_p2_total} ĐS")
                         if num_p3_total > 0: sec_notes.append(f"{num_p3_total} TL Ngắn")
+                        if num_p4_total > 0: sec_notes.append(f"{num_p4_total} Tự luận")
                         note_str = f"({', '.join(sec_notes)})" if sec_notes else ""
                         
-                        p_r = cell_right.paragraphs[0]
-                        p_r.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                        r_kt = p_r.add_run(f"{ten_ky_thi.upper()}\n")
-                        r_kt.bold = True
-                        r_kt.font.name = 'Times New Roman'; r_kt.font.size = Pt(11)
-                        
-                        r_mon = p_r.add_run(f"Môn thi: {mon_thi.upper()}\n")
-                        r_mon.bold = True
-                        r_mon.font.name = 'Times New Roman'; r_mon.font.size = Pt(10.5)
-                        
-                        r_tg = p_r.add_run(f"Thời gian: {thoi_gian}\n")
-                        r_tg.font.name = 'Times New Roman'; r_tg.font.size = Pt(10); r_tg.italic = True
-                        
-                        r_note = p_r.add_run(f"Đề có {note_str}")
-                        r_note.font.name = 'Times New Roman'; r_note.font.size = Pt(9.5); r_note.italic = True
-                        
-                        # 2. ĐỊNH DẠNG HỌ TÊN, SỐ BÁO BÁO DẠNH, MÃ ĐỀ
-                        p_name = doc.add_paragraph()
-                        p_name.paragraph_format.space_before = Pt(8)
-                        p_name.paragraph_format.space_after = Pt(2)
-                        r_name = p_name.add_run("Họ tên học sinh: ....................................................................................................")
-                        r_name.font.name = 'Times New Roman'; r_name.font.size = Pt(12)
-
-                        p_sbd = doc.add_paragraph()
-                        p_sbd.paragraph_format.space_before = Pt(2)
-                        p_sbd.paragraph_format.space_after = Pt(2)
-                        r_sbd = p_sbd.add_run("Số báo danh: ........................................................................................................")
-                        r_sbd.font.name = 'Times New Roman'; r_sbd.font.size = Pt(12)
-
-                        p_made = doc.add_paragraph()
-                        p_made.paragraph_format.space_before = Pt(2)
-                        p_made.paragraph_format.space_after = Pt(10)
-                        r_m1 = p_made.add_run("Mã đề: ")
-                        r_m1.bold = True
-                        r_m1.font.name = 'Times New Roman'; r_m1.font.size = Pt(12)
-                        r_m2 = p_made.add_run(f"{ma_de}")
-                        r_m2.bold = True
-                        r_m2.font.name = 'Times New Roman'; r_m2.font.size = Pt(12)
+                        # 1 & 2. TẠO KHUNG HEADER TIÊU ĐỀ HỌ TÊN MÃ ĐỀ
+                        Tao_Header_Trang_In(doc, so_gd, ten_truong, ten_ky_thi, mon_thi, thoi_gian, note_str, ma_de)
 
                         nhan_p1_word = ["A.", "B.", "C.", "D."]
                         nhan_p1_excel = ["A", "B", "C", "D"]
@@ -1003,7 +1054,67 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                         ma_de_answers[ma_de]['p3'].append(str(q["correct"]).strip())
                                         current_q_idx += 1
 
-                        # 6. LỜI DẶN CHÂN TRANG
+                        # 6. TRỘN PHẦN IV (PHẦN TỰ LUẬN)
+                        if phan4_goc:
+                            p_head4 = doc.add_paragraph()
+                            Set_Paragraph_Justify_And_Zero_Indent(p_head4)
+                            p_head4.paragraph_format.space_before = Pt(10)
+                            p_head4.paragraph_format.space_after = Pt(4)
+                            r_h4 = p_head4.add_run(f"PHẦN IV. Thí sinh trả lời từ câu 1 đến câu {num_p4_total}.")
+                            r_h4.bold = True
+                            r_h4.font.name = 'Times New Roman'; r_h4.font.size = Pt(12)
+
+                            p4_shuffled_blocks = copy.deepcopy(phan4_goc)
+                            random.shuffle(p4_shuffled_blocks)
+                            current_q_idx = 1
+
+                            for block in p4_shuffled_blocks:
+                                if not block.get("is_cluster"):
+                                    q = block["item"]
+                                    updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {current_q_idx}: ")
+                                    append_elem(doc, updated_q0)
+                                    
+                                    for sub_elem in q["q_elems"][1:]:
+                                        sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
+                                        doc_tmp = Document()
+                                        append_elem(doc_tmp, sub_copied)
+                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        
+                                    ma_de_answers[ma_de]['p4'].append({"q_num": current_q_idx, "item": q})
+                                    current_q_idx += 1
+                                else:
+                                    c_items = block["items"]
+                                    if not block.get("is_fixed", False):
+                                        random.shuffle(c_items)
+                                    k_count = len(c_items)
+                                    start_q = current_q_idx
+                                    end_q = current_q_idx + k_count - 1
+                                    
+                                    Render_Cau_Dan_Chum(doc, start_q, end_q)
+                                    
+                                    for intro_elem in block["intro_elems"]:
+                                        intro_copied = Copy_Element_With_Media(intro_elem, doc_goc_obj, doc, rid_map)
+                                        doc_tmp = Document()
+                                        append_elem(doc_tmp, intro_copied)
+                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        
+                                    for q in c_items:
+                                        updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {current_q_idx}: ")
+                                        append_elem(doc, updated_q0)
+                                        
+                                        for sub_elem in q["q_elems"][1:]:
+                                            sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
+                                            doc_tmp = Document()
+                                            append_elem(doc_tmp, sub_copied)
+                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                            
+                                        ma_de_answers[ma_de]['p4'].append({"q_num": current_q_idx, "item": q})
+                                        current_q_idx += 1
+
+                        # 7. LỜI DẶN CHÂN TRANG
                         p_foot1 = doc.add_paragraph()
                         p_foot1.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         p_foot1.paragraph_format.space_before = Pt(12)
@@ -1022,7 +1133,7 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                         doc.save(doc_io)
                         zip_file.writestr(f"{ma_de}.docx", doc_io.getvalue())
                     
-                    # --- XUẤT FILE EXCEL ĐÁP ÁN MATRẬN ĐỒNG BỘ 100% ---
+                    # --- XUẤT FILE EXCEL ĐÁP ÁN MATRẬN PHẦN I, II, III ---
                     wb_excel = openpyxl.Workbook()
                     ws_excel = wb_excel.active
                     ws_excel.title = "Sheet1"
@@ -1076,6 +1187,65 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                     excel_io = io.BytesIO()
                     wb_excel.save(excel_io)
                     zip_file.writestr("Dap_an_cac_Ma_de.xlsx", excel_io.getvalue())
+
+                    # --- XUẤT FILE WORD ĐÁP ÁN PHẦN IV TỰ LUẬN (CHỈ KHI ĐỀ GỐC CÓ PHẦN IV) ---
+                    if num_p4_total > 0:
+                        doc_p4_ans = Document()
+                        Thiet_Lap_Font_Times_New_Roman(doc_p4_ans)
+                        rid_map_ans = {}
+
+                        for md_idx, ma_de in enumerate(danh_sach_ma_de):
+                            if md_idx > 0:
+                                doc_p4_ans.add_page_break()
+
+                            Tao_Header_Trang_In(doc_p4_ans, so_gd, ten_truong, ten_ky_thi, mon_thi, thoi_gian, "", ma_de)
+
+                            p_title_ans = doc_p4_ans.add_paragraph()
+                            p_title_ans.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            p_title_ans.paragraph_format.space_before = Pt(8)
+                            p_title_ans.paragraph_format.space_after = Pt(8)
+                            r_t_ans = p_title_ans.add_run(f"ĐÁP ÁN & LỜI GIẢI CHI TIẾT PHẦN TỰ LUẬN - MÃ ĐỀ: {ma_de}")
+                            r_t_ans.bold = True
+                            r_t_ans.font.name = 'Times New Roman'
+                            r_t_ans.font.size = Pt(13)
+
+                            for q_info in ma_de_answers[ma_de]['p4']:
+                                q_num = q_info["q_num"]
+                                q_item = q_info["item"]
+                                sol_elems = q_item.get("sol_elems", [])
+
+                                p_qnum = doc_p4_ans.add_paragraph()
+                                Set_Paragraph_Justify_And_Zero_Indent(p_qnum)
+                                p_qnum.paragraph_format.space_before = Pt(6)
+                                p_qnum.paragraph_format.space_after = Pt(2)
+                                r_q = p_qnum.add_run(f"Câu {q_num}:")
+                                r_q.bold = True
+                                r_q.font.name = 'Times New Roman'
+                                r_q.font.size = Pt(12)
+
+                                if sol_elems:
+                                    for sol_elem in sol_elems:
+                                        sol_copied = Copy_Element_With_Media(sol_elem, doc_goc_obj, doc_p4_ans, rid_map_ans)
+                                        doc_tmp = Document()
+                                        append_elem(doc_tmp, sol_copied)
+                                        if len(doc_tmp.paragraphs) > 0:
+                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                            append_elem(doc_p4_ans, doc_tmp.paragraphs[0]._element)
+                                        else:
+                                            append_elem(doc_p4_ans, sol_copied)
+                                else:
+                                    p_empty = doc_p4_ans.add_paragraph()
+                                    Set_Paragraph_Justify_And_Zero_Indent(p_empty)
+                                    p_empty.paragraph_format.space_before = Pt(0)
+                                    p_empty.paragraph_format.space_after = Pt(4)
+                                    r_e = p_empty.add_run("(Chưa có lời giải chi tiết)")
+                                    r_e.italic = True
+                                    r_e.font.name = 'Times New Roman'
+                                    r_e.font.size = Pt(12)
+
+                        doc_p4_io = io.BytesIO()
+                        doc_p4_ans.save(doc_p4_io)
+                        zip_file.writestr("Dap_an_Tu_luan_cac_Ma_de.docx", doc_p4_io.getvalue())
 
                 st.success("🎉 Trộn đề thành công!")
                 st.download_button(
