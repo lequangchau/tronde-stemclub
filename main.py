@@ -18,7 +18,7 @@ import pandas as pd
 from lxml import etree
 
 # 1. CẤU HÌNH TRANG WEB
-st.set_page_config(page_title="LQChau - Trộn Đề Kiểm tra môn Vật Lí", page_icon="📝", layout="centered")
+st.set_page_config(page_title="Trộn Đề Kiểm tra môn Vật Lí", page_icon="📝", layout="centered")
 
 st.title("📝 Dự án CLB STEM: Ứng Dụng Trộn Đề Kiểm Tra Môn Vật Lí")
 st.caption("👨‍🏫 **Tác giả:** LQChau, BNDQuan - CLB STEM - THPT Thủ Đức")
