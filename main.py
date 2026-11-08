@@ -15,6 +15,7 @@ from docx.oxml.ns import qn
 import openpyxl
 from openpyxl.styles import Alignment, Font
 import pandas as pd
+from lxml import etree
 
 # 1. CẤU HÌNH TRANG WEB
 st.set_page_config(page_title="Trộn Đề Kiểm tra môn Vật Lí", page_icon="📝", layout="centered")
@@ -81,7 +82,16 @@ with st.container():
 
 st.divider()
 
-# 2. TRÍCH XUẤT VĂN BẢN VÀ XỬ LÝ XML CÔNG THỨC & HÌNH ẢNH
+# 2. HÀM XỬ LÝ AN TOÀN XML CÔNG THỨC & HÌNH ẢNH
+def get_elem_xml(node):
+    """Lấy chuỗi XML an toàn từ bất kỳ phần tử XML/lxml nào"""
+    if hasattr(node, 'xml'):
+        return node.xml
+    try:
+        return etree.tostring(node, encoding='unicode')
+    except Exception:
+        return ""
+
 def get_node_text(node):
     """Trích xuất toàn bộ chữ trong đoạn văn XML (bao gồm chữ thường <w:t>, công thức toán <m:t> và tab <w:tab/>)"""
     if node.tag.endswith('}t'):
@@ -203,17 +213,24 @@ def append_elem(doc, elem):
     else:
         body.append(elem)
 
-def Kiem_Tra_Gach_Chan(paragraph):
-    for r in paragraph.runs:
-        if r.text and r.text.strip():
-            if bool(r.underline) and r.underline != 0 and r.underline is not False:
-                return True
+def Kiem_Tra_Gach_Chan_Elem(p_elem):
+    if not p_elem.tag.endswith('p'):
+        return False
+    for r in p_elem.findall(qn('w:r')):
+        t_text = "".join(t.text or "" for t in r.findall(qn('w:t')))
+        if t_text.strip():
+            rPr = r.find(qn('w:rPr'))
+            if rPr is not None:
+                u = rPr.find(qn('w:u'))
+                if u is not None and u.get(qn('w:val')) != 'none':
+                    return True
     return False
 
-def Has_Auto_Numbering(p):
-    """Kiểm tra xem đoạn văn có sử dụng tính năng Đánh số tự động (Bullets and Numbering) của Word hay không"""
-    pPr = p._element.pPr
-    if pPr is not None and pPr.numPr is not None:
+def Has_Auto_Numbering_Elem(p_elem):
+    if not p_elem.tag.endswith('p'):
+        return False
+    pPr = p_elem.find(qn('w:pPr'))
+    if pPr is not None and pPr.find(qn('w:numPr')) is not None:
         return True
     return False
 
@@ -229,7 +246,8 @@ def split_paragraph_options(p_elem):
     char_to_child_idx = []
     for idx, child in enumerate(children):
         c_txt = get_node_text(child)
-        if not c_txt and ("drawing" in child.xml or "graphic" in child.xml or "pict" in child.xml or "object" in child.xml):
+        child_xml = get_elem_xml(child)
+        if not c_txt and ("drawing" in child_xml or "graphic" in child_xml or "pict" in child_xml or "object" in child_xml):
             c_txt = " [IMG] "
         for ch in c_txt:
             full_str += ch
@@ -384,7 +402,7 @@ def Lay_Noi_Dung_Phuong_An_Clean(p_elem, doc_src, doc_target, rid_map, new_prefi
 def Render_Phuong_An_Phan_1(doc, doc_src, rid_map, opts, nhan_p1):
     total_len = sum(len(opt["text"]) for opt in opts)
     max_len = max(len(opt["text"]) for opt in opts) if opts else 0
-    has_math = any("oMath" in opt["elem"].xml for opt in opts)
+    has_math = any("oMath" in get_elem_xml(opt["elem"]) for opt in opts)
     
     if total_len <= 28 and max_len <= 8 and len(opts) == 4 and not has_math:
         p_combined = Document().add_paragraph()
@@ -604,13 +622,14 @@ def doc_de_goc(file_stream):
             current_cluster = None
             in_cluster = False
 
-    # Duyệt toàn bộ các khối phần tử (Đoạn văn & Bảng biểu) trong document
+    # LỌC AN TOÀN CHỈ CÁC PHẦN TỬ NỘI DUNG (ĐOẠN VĂN <w:p> & BẢNG BIỂU <w:tbl>)
     for elem in doc._element.body:
-        if elem.tag.endswith('sectPr'):
+        if not (elem.tag.endswith('p') or elem.tag.endswith('tbl')):
             continue
 
         full_line = get_node_text(elem).strip()
-        has_drawing = ("drawing" in elem.xml or "graphic" in elem.xml or "pict" in elem.xml or "oMath" in elem.xml)
+        elem_xml = get_elem_xml(elem)
+        has_drawing = ("drawing" in elem_xml or "graphic" in elem_xml or "pict" in elem_xml or "oMath" in elem_xml)
         
         if not full_line and not has_drawing:
             continue
@@ -658,11 +677,7 @@ def doc_de_goc(file_stream):
                 continue
 
         is_explicit_q = bool(re.match(r'^(Câu|Cau)\s*\d+[\.\:\-\)\s]', full_line, re.IGNORECASE)) or bool(re.match(r'^\d+[\.\:\-\)]', full_line))
-        
-        # Kiểm tra auto numbering đối với đoạn văn <w:p>
-        doc_tmp_p = Document()
-        append_elem(doc_tmp_p, elem)
-        is_auto_num = Has_Auto_Numbering(doc_tmp_p.paragraphs[0]) if len(doc_tmp_p.paragraphs) > 0 else False
+        is_auto_num = Has_Auto_Numbering_Elem(elem)
         is_opt_line = bool(re.match(r'^[\s\t\xa0]*[A-Da-d][\.\:\-\)]', full_line))
         
         is_question = False
@@ -716,7 +731,7 @@ def doc_de_goc(file_stream):
             elif current_item and not in_solution:
                 if is_opt_line:
                     clean_sub_text = re.sub(r'^[A-Da-d][\.\:\-\)\s]*', '', full_line).strip()
-                    is_under = Kiem_Tra_Gach_Chan(doc_tmp_p.paragraphs[0]) if len(doc_tmp_p.paragraphs) > 0 else False
+                    is_under = Kiem_Tra_Gach_Chan_Elem(elem)
                     current_item["sub_options"].append({
                         "elem": elem,
                         "text": clean_sub_text,
@@ -852,8 +867,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                         sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
                                         doc_tmp = Document()
                                         append_elem(doc_tmp, sub_copied)
-                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        if len(doc_tmp.paragraphs) > 0:
+                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        else:
+                                            append_elem(doc, sub_copied)
                                     
                                     opts = q["options"]
                                     correct_idx = q["correct_idx"]
@@ -883,8 +901,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                         intro_copied = Copy_Element_With_Media(intro_elem, doc_goc_obj, doc, rid_map)
                                         doc_tmp = Document()
                                         append_elem(doc_tmp, intro_copied)
-                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        if len(doc_tmp.paragraphs) > 0:
+                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        else:
+                                            append_elem(doc, intro_copied)
                                         
                                     for q in c_items:
                                         updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {current_q_idx}: ")
@@ -894,8 +915,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                             sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
                                             doc_tmp = Document()
                                             append_elem(doc_tmp, sub_copied)
-                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                            if len(doc_tmp.paragraphs) > 0:
+                                                Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                                append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                            else:
+                                                append_elem(doc, sub_copied)
                                         
                                         opts = q["options"]
                                         correct_idx = q["correct_idx"]
@@ -936,8 +960,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                         sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
                                         doc_tmp = Document()
                                         append_elem(doc_tmp, sub_copied)
-                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        if len(doc_tmp.paragraphs) > 0:
+                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        else:
+                                            append_elem(doc, sub_copied)
                                     
                                     subs = q["sub_options"]
                                     random.shuffle(subs)
@@ -966,8 +993,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                         intro_copied = Copy_Element_With_Media(intro_elem, doc_goc_obj, doc, rid_map)
                                         doc_tmp = Document()
                                         append_elem(doc_tmp, intro_copied)
-                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        if len(doc_tmp.paragraphs) > 0:
+                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        else:
+                                            append_elem(doc, intro_copied)
                                         
                                     for q in c_items:
                                         updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {current_q_idx}: ")
@@ -977,8 +1007,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                             sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
                                             doc_tmp = Document()
                                             append_elem(doc_tmp, sub_copied)
-                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                            if len(doc_tmp.paragraphs) > 0:
+                                                Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                                append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                            else:
+                                                append_elem(doc, sub_copied)
                                         
                                         subs = q["sub_options"]
                                         random.shuffle(subs)
@@ -1018,8 +1051,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                         sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
                                         doc_tmp = Document()
                                         append_elem(doc_tmp, sub_copied)
-                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        if len(doc_tmp.paragraphs) > 0:
+                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        else:
+                                            append_elem(doc, sub_copied)
                                         
                                     ma_de_answers[ma_de]['p3'].append(str(q["correct"]).strip())
                                     current_q_idx += 1
@@ -1037,8 +1073,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                         intro_copied = Copy_Element_With_Media(intro_elem, doc_goc_obj, doc, rid_map)
                                         doc_tmp = Document()
                                         append_elem(doc_tmp, intro_copied)
-                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        if len(doc_tmp.paragraphs) > 0:
+                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        else:
+                                            append_elem(doc, intro_copied)
                                         
                                     for q in c_items:
                                         updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {current_q_idx}: ")
@@ -1048,8 +1087,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                             sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
                                             doc_tmp = Document()
                                             append_elem(doc_tmp, sub_copied)
-                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                            if len(doc_tmp.paragraphs) > 0:
+                                                Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                                append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                            else:
+                                                append_elem(doc, sub_copied)
                                             
                                         ma_de_answers[ma_de]['p3'].append(str(q["correct"]).strip())
                                         current_q_idx += 1
@@ -1078,8 +1120,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                         sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
                                         doc_tmp = Document()
                                         append_elem(doc_tmp, sub_copied)
-                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        if len(doc_tmp.paragraphs) > 0:
+                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        else:
+                                            append_elem(doc, sub_copied)
                                         
                                     ma_de_answers[ma_de]['p4'].append({"q_num": current_q_idx, "item": q})
                                     current_q_idx += 1
@@ -1097,8 +1142,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                         intro_copied = Copy_Element_With_Media(intro_elem, doc_goc_obj, doc, rid_map)
                                         doc_tmp = Document()
                                         append_elem(doc_tmp, intro_copied)
-                                        Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                        append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        if len(doc_tmp.paragraphs) > 0:
+                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                        else:
+                                            append_elem(doc, intro_copied)
                                         
                                     for q in c_items:
                                         updated_q0 = Cap_Nhat_Tien_To_Cau(q["q_elems"][0], doc_goc_obj, doc, rid_map, f"Câu {current_q_idx}: ")
@@ -1108,8 +1156,11 @@ if st.button("🚀 Bước 2: Bắt Đầu Trộn Đề & Tạo File Đáp Án",
                                             sub_copied = Copy_Element_With_Media(sub_elem, doc_goc_obj, doc, rid_map)
                                             doc_tmp = Document()
                                             append_elem(doc_tmp, sub_copied)
-                                            Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
-                                            append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                            if len(doc_tmp.paragraphs) > 0:
+                                                Set_Paragraph_Justify_And_Zero_Indent(doc_tmp.paragraphs[0])
+                                                append_elem(doc, doc_tmp.paragraphs[0]._element)
+                                            else:
+                                                append_elem(doc, sub_copied)
                                             
                                         ma_de_answers[ma_de]['p4'].append({"q_num": current_q_idx, "item": q})
                                         current_q_idx += 1
