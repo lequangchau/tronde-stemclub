@@ -26,13 +26,13 @@ st.write("Công cụ trộn đề kiểm tra môn Vật lí theo cấu trúc c�
 
 st.divider()
 
-# CONFIG ĐƯỜNG DẪN FILE MẪU & LINK LƯU TRỮ ĐÁM MÂY (GOOGLE DRIVE CLOUD STORAGE)
+# ĐƯỜNG DẪN ĐẾN FILE MẪU
 FILE_MAU_TEN = "TX_B9_MIX.docx"  # Đặt file TX_B9_MIX.docx cùng thư mục với main.py
 CLOUD_STORAGE_URL = "https://docs.google.com/document/d/1kNN3qXByIqA3pE9rBpat0JfY6v5iBGWi/edit?usp=sharing&ouid=109853281143982423134&rtpof=true&sd=true"
 
 @st.cache_data
 def load_file_mau_bytes():
-    """Tải nội dung binary của file đề mẫu TX_B9_MIX.docx từ cục bộ hoặc từ Google Drive Cloud Storage"""
+    """Tải nội dung binary của file đề mẫu TX_B9_MIX.docx từ cục bộ hoặc từ Google Drive"""
     if os.path.exists(FILE_MAU_TEN):
         try:
             with open(FILE_MAU_TEN, "rb") as f:
@@ -82,7 +82,7 @@ with st.container():
 
 st.divider()
 
-# 2. HÀM XỬ LÝ AN TOÀN XML CÔNG THỨC & HÌNH ẢNH
+# 2. XỬ LÝ AN TOÀN XML CÔNG THỨC & HÌNH ẢNH
 def get_elem_xml(node):
     """Lấy chuỗi XML an toàn từ bất kỳ phần tử XML/lxml nào"""
     if hasattr(node, 'xml'):
